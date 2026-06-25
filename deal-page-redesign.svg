@@ -1,0 +1,164 @@
+<svg width="1600" height="1100" viewBox="0 0 1600 1100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f3f6f0"/>
+      <stop offset="100%" stop-color="#e0ebe4"/>
+    </linearGradient>
+    <filter id="shadow2" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000000" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrowGreen" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#1d725b"/>
+    </marker>
+    <style>
+      .title { font: 700 34px Arial, sans-serif; fill: #1f2430; }
+      .subtitle { font: 400 18px Arial, sans-serif; fill: #4f5a68; }
+      .label { font: 700 17px Arial, sans-serif; fill: #1f2430; }
+      .small { font: 400 14px Arial, sans-serif; fill: #52606e; }
+      .tiny { font: 400 12px Arial, sans-serif; fill: #6a7380; }
+      .calloutTitle { font: 700 18px Arial, sans-serif; fill: #125343; }
+      .calloutBody { font: 400 14px Arial, sans-serif; fill: #194d42; }
+      .cardTitle { font: 700 18px Arial, sans-serif; fill: #243042; }
+      .metric { font: 700 34px Arial, sans-serif; fill: #102334; }
+      .metricSmall { font: 700 22px Arial, sans-serif; fill: #102334; }
+      .pill { font: 700 14px Arial, sans-serif; fill: #18473c; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1100" fill="url(#bg2)"/>
+  <text x="72" y="74" class="title">Proposed Simplified Deal Page</text>
+  <text x="72" y="106" class="subtitle">Redesigned hierarchy focused on one question first: should this deal advance, and what must be verified next?</text>
+
+  <g filter="url(#shadow2)">
+    <rect x="70" y="150" width="980" height="860" rx="28" fill="#fcfffb" stroke="#c7d6c9"/>
+  </g>
+
+  <rect x="70" y="150" width="210" height="860" rx="28" fill="#17332d"/>
+  <text x="98" y="202" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#f2faf3">DealDecision AI</text>
+  <rect x="98" y="230" width="154" height="38" rx="12" fill="#9ed3b7"/>
+  <text x="125" y="255" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#163129">New Deal</text>
+  <text x="98" y="306" class="tiny" fill="#9fb8af">WORK</text>
+  <g fill="#eef7f1" font-family="Arial, sans-serif" font-size="16">
+    <text x="98" y="338">Dashboard</text>
+    <text x="98" y="372">Deal Pipeline</text>
+    <text x="98" y="406">Documents</text>
+    <text x="98" y="440">Reports</text>
+  </g>
+  <text x="98" y="500" class="tiny" fill="#9fb8af">ACCOUNT</text>
+  <g fill="#eef7f1" font-family="Arial, sans-serif" font-size="16">
+    <text x="98" y="532">Team</text>
+    <text x="98" y="566">Settings</text>
+  </g>
+  <text x="98" y="930" class="tiny" fill="#9fb8af">Dev / Admin moved to separate mode</text>
+
+  <rect x="302" y="176" width="720" height="56" rx="18" fill="#eef5ef" stroke="#d3dfd4"/>
+  <text x="332" y="210" class="small">Deal Workspace</text>
+  <text x="846" y="210" class="small">Search, account, notifications</text>
+
+  <text x="302" y="282" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#182334">Allurion Multi-Doc Audit</text>
+  <text x="302" y="314" class="small">de_spac • public_company • analyzed Apr 21, 2026</text>
+
+  <rect x="302" y="348" width="720" height="216" rx="24" fill="#f8fffb" stroke="#c9d9cb"/>
+  <text x="328" y="384" class="cardTitle">Decision Summary</text>
+  <rect x="328" y="406" width="146" height="32" rx="16" fill="#e6f4eb"/>
+  <text x="355" y="427" class="pill">INVESTIGATE</text>
+  <text x="328" y="466" class="metric">Not Ready to Commit</text>
+  <text x="328" y="500" class="small">Potential exists, but unresolved evidence gaps and contradictions block a commitment today.</text>
+  <rect x="328" y="522" width="210" height="28" rx="14" fill="#fff4db"/>
+  <text x="352" y="541" class="pill" fill="#785e14">Confidence: Fragile</text>
+  <text x="585" y="432" class="metricSmall">44.2 / 100</text>
+  <text x="585" y="456" class="small">Deal Quality</text>
+  <text x="760" y="432" class="metricSmall">High Tension</text>
+  <text x="760" y="456" class="small">Contradictions present</text>
+  <text x="585" y="510" class="small">Why: financial support exists, but ownership terms, demand proof, and contradiction resolution are incomplete.</text>
+
+  <rect x="302" y="586" width="438" height="180" rx="22" fill="#f8fffb" stroke="#c9d9cb"/>
+  <text x="328" y="622" class="cardTitle">What Must Be Verified Next</text>
+  <text x="328" y="656" class="small">1. Clarify cap table, ownership terms, and convertible instruments.</text>
+  <text x="328" y="686" class="small">2. Validate market demand with contracts, LOIs, or cohort evidence.</text>
+  <text x="328" y="716" class="small">3. Submit independent proof of product or asset quality.</text>
+  <text x="328" y="746" class="small">4. Resolve regulatory timeline uncertainty.</text>
+
+  <rect x="762" y="586" width="260" height="180" rx="22" fill="#f8fffb" stroke="#c9d9cb"/>
+  <text x="788" y="622" class="cardTitle">Why We Think This</text>
+  <text x="788" y="656" class="small">Financial data supports parts of the analysis.</text>
+  <text x="788" y="686" class="small">Team capability appears credible.</text>
+  <text x="788" y="716" class="small">Traction is partially confirmed.</text>
+  <text x="788" y="746" class="small">Each claim links directly to source evidence.</text>
+
+  <rect x="302" y="788" width="720" height="62" rx="20" fill="#eef5ef" stroke="#d3dfd4"/>
+  <rect x="320" y="802" width="128" height="34" rx="17" fill="#17332d"/>
+  <text x="357" y="824" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#f5fcf6">Summary</text>
+  <text x="482" y="824" class="small">Evidence</text>
+  <text x="600" y="824" class="small">Risks</text>
+  <text x="694" y="824" class="small">Financials</text>
+  <text x="810" y="824" class="small">Diagnostics</text>
+  <text x="928" y="824" class="small">Activity</text>
+
+  <rect x="302" y="870" width="350" height="116" rx="22" fill="#f8fffb" stroke="#c9d9cb"/>
+  <text x="328" y="906" class="cardTitle">Summary View</text>
+  <text x="328" y="938" class="small">Key facts, raise terms, and core narrative stay visible here.</text>
+  <text x="328" y="964" class="small">Everything else is discoverable through tabs.</text>
+
+  <rect x="672" y="870" width="350" height="116" rx="22" fill="#f8fffb" stroke="#c9d9cb"/>
+  <text x="698" y="906" class="cardTitle">Secondary Rail</text>
+  <text x="698" y="938" class="small">Jobs, notifications, and recent activity move to a collapsed side panel or drawer.</text>
+  <text x="698" y="964" class="small">Useful for monitoring, but not part of the first decision pass.</text>
+
+  <rect x="1040" y="260" width="210" height="210" rx="22" fill="#eaf7ee" stroke="#bdd1c1"/>
+  <text x="1064" y="296" class="cardTitle">Evidence Panel</text>
+  <text x="1064" y="328" class="small">Each driver and required check can open</text>
+  <text x="1064" y="348" class="small">its source docs, extracted claims, and conflicts.</text>
+  <text x="1064" y="390" class="small">Supports trust without cluttering the default view.</text>
+
+  <rect x="1040" y="502" width="210" height="180" rx="22" fill="#eaf7ee" stroke="#bdd1c1"/>
+  <text x="1064" y="538" class="cardTitle">Diagnostics</text>
+  <text x="1064" y="570" class="small">Deep-dive analysis stays available,</text>
+  <text x="1064" y="590" class="small">but behind a tab rather than on first paint.</text>
+
+  <rect x="1040" y="714" width="210" height="140" rx="22" fill="#eaf7ee" stroke="#bdd1c1"/>
+  <text x="1064" y="750" class="cardTitle">Ops Drawer</text>
+  <text x="1064" y="782" class="small">Polling jobs, events, and orchestration state live here.</text>
+
+  <g filter="url(#shadow2)">
+    <rect x="1270" y="186" width="270" height="126" rx="24" fill="#eefbf3" stroke="#9bc4aa"/>
+  </g>
+  <text x="1292" y="222" class="calloutTitle">1. One headline answer first</text>
+  <text x="1292" y="250" class="calloutBody">Verdict, score, confidence, and why are merged</text>
+  <text x="1292" y="270" class="calloutBody">into one summary block.</text>
+  <path d="M1270 250 C1210 250, 1160 300, 1000 380" fill="none" stroke="#1d725b" stroke-width="3" marker-end="url(#arrowGreen)"/>
+
+  <g filter="url(#shadow2)">
+    <rect x="1270" y="340" width="270" height="126" rx="24" fill="#eefbf3" stroke="#9bc4aa"/>
+  </g>
+  <text x="1292" y="376" class="calloutTitle">2. Action-first next steps</text>
+  <text x="1292" y="404" class="calloutBody">Required checks move directly under the verdict</text>
+  <text x="1292" y="424" class="calloutBody">so the user knows what to do next.</text>
+  <path d="M1270 410 C1215 430, 1130 540, 738 620" fill="none" stroke="#1d725b" stroke-width="3" marker-end="url(#arrowGreen)"/>
+
+  <g filter="url(#shadow2)">
+    <rect x="1270" y="494" width="270" height="126" rx="24" fill="#eefbf3" stroke="#9bc4aa"/>
+  </g>
+  <text x="1292" y="530" class="calloutTitle">3. Progressive disclosure</text>
+  <text x="1292" y="558" class="calloutBody">Evidence, diagnostics, and activity remain</text>
+  <text x="1292" y="578" class="calloutBody">available, but they no longer dominate first paint.</text>
+  <path d="M1270 570 C1210 610, 1150 760, 1040 790" fill="none" stroke="#1d725b" stroke-width="3" marker-end="url(#arrowGreen)"/>
+
+  <g filter="url(#shadow2)">
+    <rect x="1270" y="648" width="270" height="126" rx="24" fill="#eefbf3" stroke="#9bc4aa"/>
+  </g>
+  <text x="1292" y="684" class="calloutTitle">4. Evidence linked to claims</text>
+  <text x="1292" y="712" class="calloutBody">Supporting reasons become short, scannable lines</text>
+  <text x="1292" y="732" class="calloutBody">that open source-backed detail on demand.</text>
+  <path d="M1270 720 C1205 720, 1145 660, 1022 660" fill="none" stroke="#1d725b" stroke-width="3" marker-end="url(#arrowGreen)"/>
+
+  <g filter="url(#shadow2)">
+    <rect x="1270" y="802" width="270" height="126" rx="24" fill="#eefbf3" stroke="#9bc4aa"/>
+  </g>
+  <text x="1292" y="838" class="calloutTitle">5. Separate system modes</text>
+  <text x="1292" y="866" class="calloutBody">Admin and dev surfaces move out of the core</text>
+  <text x="1292" y="886" class="calloutBody">analyst navigation for cleaner primary flows.</text>
+  <path d="M1270 874 C1200 870, 1120 920, 270 930" fill="none" stroke="#1d725b" stroke-width="3" marker-end="url(#arrowGreen)"/>
+
+  <text x="70" y="1054" class="small">Recommended hierarchy: decision summary → required checks → why we think this → tabbed detail (evidence, risks, financials, diagnostics, activity).</text>
+</svg>
