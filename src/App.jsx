@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import VoiceAppShell from './components/VoiceAppShell.jsx';
+import { startConversation, streamMessage, fetchSpeech } from './lib/brainClient.js';
 
 const SKIN_STORAGE_KEY = 'john-maxwell-voice-skin';
 const BOOKMARK_STORAGE_KEY = 'john-maxwell-saved-insights';
@@ -39,16 +40,18 @@ const skins = [
   },
 ];
 
-const demoQuestion = 'How do I become a better leader for my team?';
-const demoResponse =
-  'Leadership begins with influence, not position. When you add value to people, they will follow you anywhere.';
-
 const voiceStates = [
   { id: 'idle', label: 'Ready when you are.', button: 'Tap to speak' },
   { id: 'listening', label: "I'm listening.", button: 'Listening' },
   { id: 'reflecting', label: 'Reflecting...', button: 'Reflecting' },
-  { id: 'responding', label: 'Leadership begins with influence, not position...', button: 'Save insight' },
+  { id: 'responding', label: "Here's my response.", button: 'Save insight' },
 ];
+
+function getSpeechRecognitionCtor() {
+  return typeof window !== 'undefined'
+    ? window.SpeechRecognition || window.webkitSpeechRecognition || null
+    : null;
+}
 
 const journalEntries = [
   {
@@ -56,8 +59,9 @@ const journalEntries = [
     date: 'June 23',
     title: 'Building Accountability in My Team',
     duration: '14 min',
-    question: demoQuestion,
-    response: demoResponse,
+    question: 'How do I become a better leader for my team?',
+    response:
+      'Leadership begins with influence, not position. When you add value to people, they will follow you anywhere.',
     takeaway: 'Add value to your people and you will earn their influence.',
   },
   {
@@ -109,6 +113,17 @@ export default function App() {
   const [voiceTransition, setVoiceTransition] = useState(null);
   const voiceTransitionTimerRef = useRef(null);
 
+  // Real conversation state (replaces the old scripted demo question/response).
+  const [threadId, setThreadId] = useState(null);
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState("I'm glad you're here. Tap the orb and ask me anything about leadership.");
+  const [currentInsight, setCurrentInsight] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const micSupported = useMemo(() => Boolean(getSpeechRecognitionCtor()), []);
+  const recognitionRef = useRef(null);
+  const streamAbortRef = useRef(null);
+  const answerRef = useRef('');
+
   const selectedSkin = useMemo(
     () => skins.find((skin) => skin.id === selectedSkinId) ?? skins[0],
     [selectedSkinId],
@@ -127,9 +142,36 @@ export default function App() {
   useEffect(
     () => () => {
       window.clearTimeout(voiceTransitionTimerRef.current);
+      recognitionRef.current?.abort();
+      streamAbortRef.current?.abort();
     },
     [],
   );
+
+  useEffect(() => {
+    if (!micSupported) {
+      setErrorMessage("Voice input isn't supported in this browser. Try Chrome, Edge, or Safari.");
+    }
+  }, [micSupported]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { id, openingMessage } = await startConversation();
+        if (cancelled) return;
+        setThreadId(id);
+        setAnswer(openingMessage);
+      } catch {
+        if (!cancelled) {
+          setErrorMessage("Couldn't reach the Maxwell Brain service. Is it running on VITE_BRAIN_API_URL?");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function moveToVoiceState(nextIndex, transitionName, options = {}) {
     const { delayStateChange = 0, transitionDuration = 700 } = options;
@@ -155,38 +197,135 @@ export default function App() {
     finishTransition();
   }
 
+  function startListening() {
+    const SpeechRecognitionCtor = getSpeechRecognitionCtor();
+    if (!SpeechRecognitionCtor) {
+      setErrorMessage("Voice input isn't supported in this browser. Try Chrome, Edge, or Safari.");
+      return;
+    }
+    if (!threadId) {
+      setErrorMessage("Still connecting to Maxwell Brain — try again in a moment.");
+      return;
+    }
+
+    setErrorMessage(null);
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognitionRef.current = recognition;
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim();
+      if (!transcript) return;
+      setQuestion(transcript);
+      moveToVoiceState(2, 'listeningToReflecting', { transitionDuration: 360 });
+      sendQuery(transcript);
+    };
+    recognition.onerror = (event) => {
+      if (event.error === 'aborted') return;
+      setErrorMessage(`Voice input error: ${event.error}`);
+      moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
+    };
+    recognition.onend = () => {
+      recognitionRef.current = null;
+    };
+
+    moveToVoiceState(1, 'idleToListening', { transitionDuration: 620 });
+    try {
+      recognition.start();
+    } catch {
+      setErrorMessage("Couldn't start the microphone. Check browser permissions.");
+      moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
+    }
+  }
+
+  function stopListening() {
+    recognitionRef.current?.abort();
+    recognitionRef.current = null;
+    moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
+  }
+
+  async function sendQuery(text) {
+    setAnswer('');
+    answerRef.current = '';
+    setCurrentInsight(null);
+    streamAbortRef.current?.abort();
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
+    let respondingStarted = false;
+
+    try {
+      await streamMessage(threadId, text, {
+        signal: controller.signal,
+        onToken: (token) => {
+          if (!respondingStarted) {
+            respondingStarted = true;
+            moveToVoiceState(3, 'reflectingToResponding', { transitionDuration: 920 });
+          }
+          answerRef.current += token;
+          setAnswer(answerRef.current);
+        },
+        onDone: () => {
+          setCurrentInsight({
+            id: `insight-${threadId}-${Date.now()}`,
+            text: answerRef.current,
+            date: new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric' }),
+          });
+          playSpokenAnswer(answerRef.current);
+        },
+        onError: (message) => {
+          setErrorMessage(message);
+          moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
+        },
+      });
+    } catch (err) {
+      if (err?.name !== 'AbortError') {
+        setErrorMessage(err?.message || 'Something went wrong talking to Maxwell Brain.');
+        moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
+      }
+    }
+  }
+
+  async function playSpokenAnswer(text) {
+    // No-op until HUGGINGFACE_API_TOKEN is configured on the Brain side — fetchSpeech
+    // resolves to null in that case, so this silently activates once voice is set up.
+    const blob = await fetchSpeech(text);
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.addEventListener('ended', () => URL.revokeObjectURL(url));
+    audio.play().catch(() => {});
+  }
+
   function cycleVoiceState() {
     const currentState = voiceStates[voiceStateIndex].id;
 
     if (currentState === 'responding') {
-      toggleInsightBookmark({
-        id: 'demo-response',
-        text: 'Leadership begins with influence, not position.',
-        date: 'June 23',
-      });
+      if (currentInsight) toggleInsightBookmark(currentInsight);
       moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 1600 });
       return;
     }
 
     if (currentState === 'idle') {
-      moveToVoiceState(1, 'idleToListening', { transitionDuration: 620 });
+      startListening();
       return;
     }
 
     if (currentState === 'listening') {
-      moveToVoiceState(2, 'listeningToReflecting', {
-        delayStateChange: 760,
-        transitionDuration: 360,
-      });
+      stopListening();
       return;
     }
 
     if (currentState === 'reflecting') {
-      moveToVoiceState(3, 'reflectingToResponding', { transitionDuration: 920 });
+      streamAbortRef.current?.abort();
+      moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
       return;
     }
+  }
 
-    setVoiceStateIndex((currentIndex) => (currentIndex + 1) % voiceStates.length);
+  function saveCurrentInsight() {
+    if (currentInsight) toggleInsightBookmark(currentInsight);
   }
 
   function toggleInsightBookmark(insight) {
@@ -205,8 +344,10 @@ export default function App() {
       journalEntries={journalEntries}
       defaultInsights={defaultInsights}
       bookmarkedInsights={bookmarkedInsights}
-      demoQuestion={demoQuestion}
-      demoResponse={demoResponse}
+      demoQuestion={question}
+      demoResponse={answer}
+      currentInsightId={currentInsight?.id}
+      errorMessage={errorMessage}
       skin={selectedSkin}
       skins={skins}
       voiceState={voiceState}
@@ -227,6 +368,7 @@ export default function App() {
       onSelectJournal={setSelectedJournalId}
       onBackToJournal={() => setSelectedJournalId(null)}
       onToggleInsight={toggleInsightBookmark}
+      onSaveCurrentInsight={saveCurrentInsight}
       onSelectVoiceState={(stateId) => {
         window.clearTimeout(voiceTransitionTimerRef.current);
         setVoiceTransition(null);

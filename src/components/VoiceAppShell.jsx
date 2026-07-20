@@ -25,6 +25,8 @@ export default function VoiceAppShell({
   bookmarkedInsights,
   demoQuestion,
   demoResponse,
+  currentInsightId,
+  errorMessage,
   skin,
   skins,
   voiceState,
@@ -40,10 +42,13 @@ export default function VoiceAppShell({
   onSelectJournal,
   onBackToJournal,
   onToggleInsight,
+  onSaveCurrentInsight,
   onSelectVoiceState,
 }) {
   const CenterVisual = visualBySkin[skin.id] ?? VoiceOrb;
-  const isDemoInsightSaved = bookmarkedInsights.some((insight) => insight.id === 'demo-response');
+  const isDemoInsightSaved = Boolean(
+    currentInsightId && bookmarkedInsights.some((insight) => insight.id === currentInsightId),
+  );
 
   return (
     <main
@@ -77,8 +82,9 @@ export default function VoiceAppShell({
             voiceTransition={voiceTransition}
             demoQuestion={demoQuestion}
             demoResponse={demoResponse}
+            errorMessage={errorMessage}
             isDemoInsightSaved={isDemoInsightSaved}
-            onToggleInsight={onToggleInsight}
+            onSaveCurrentInsight={onSaveCurrentInsight}
             onCycleVoiceState={onCycleVoiceState}
           />
         )}
@@ -131,12 +137,13 @@ function HomeScreen({
   voiceTransition,
   demoQuestion,
   demoResponse,
+  errorMessage,
   isDemoInsightSaved,
-  onToggleInsight,
+  onSaveCurrentInsight,
   onCycleVoiceState,
 }) {
   const [isHeroPressed, setIsHeroPressed] = useState(false);
-  const showTranscript = ['reflecting', 'responding'].includes(voiceState.id);
+  const showTranscript = ['reflecting', 'responding'].includes(voiceState.id) && demoQuestion;
   const showResponse = voiceState.id === 'responding';
 
   return (
@@ -159,6 +166,7 @@ function HomeScreen({
 
       <section className="voicePanel homeVoicePanel" aria-live="polite">
         <p className="stateCopy">{voiceState.label}</p>
+        {errorMessage && <p className="errorCopy">{errorMessage}</p>}
         <VoiceWaveform skin={skin.id} state={voiceState.id} />
 
         <div className="conversationPreview">
@@ -177,13 +185,7 @@ function HomeScreen({
                   className={`bookmarkButton ${isDemoInsightSaved ? 'isSaved' : ''}`}
                   type="button"
                   aria-label="Save response insight"
-                  onClick={() =>
-                    onToggleInsight({
-                      id: 'demo-response',
-                      text: 'Leadership begins with influence, not position.',
-                      date: 'June 23',
-                    })
-                  }
+                  onClick={onSaveCurrentInsight}
                 >
                   ☆
                 </button>
