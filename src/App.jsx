@@ -44,7 +44,7 @@ const voiceStates = [
   { id: 'idle', label: 'Ready when you are.', button: 'Tap to speak' },
   { id: 'listening', label: "I'm listening.", button: 'Listening' },
   { id: 'reflecting', label: 'Reflecting...', button: 'Reflecting' },
-  { id: 'responding', label: "Here's my response.", button: 'Save insight' },
+  { id: 'responding', label: "Here's my response.", button: 'Tap to interrupt' },
 ];
 
 function getSpeechRecognitionCtor() {
@@ -123,6 +123,9 @@ export default function App() {
   const recognitionRef = useRef(null);
   const streamAbortRef = useRef(null);
   const answerRef = useRef('');
+  const audioElRef = useRef(null);
+  const autoListenTimerRef = useRef(null);
+  const voiceStateIndexRef = useRef(voiceStateIndex);
 
   const selectedSkin = useMemo(
     () => skins.find((skin) => skin.id === selectedSkinId) ?? skins[0],
@@ -130,6 +133,10 @@ export default function App() {
   );
 
   const voiceState = voiceStates[voiceStateIndex];
+
+  useEffect(() => {
+    voiceStateIndexRef.current = voiceStateIndex;
+  }, [voiceStateIndex]);
 
   useEffect(() => {
     window.localStorage.setItem(SKIN_STORAGE_KEY, selectedSkinId);
@@ -142,8 +149,10 @@ export default function App() {
   useEffect(
     () => () => {
       window.clearTimeout(voiceTransitionTimerRef.current);
+      window.clearTimeout(autoListenTimerRef.current);
       recognitionRef.current?.abort();
       streamAbortRef.current?.abort();
+      audioElRef.current?.pause();
     },
     [],
   );
@@ -209,6 +218,16 @@ export default function App() {
     }
 
     setErrorMessage(null);
+    window.clearTimeout(autoListenTimerRef.current);
+
+    // Unlock audio playback on iOS Safari: a <audio> element can only start
+    // playing programmatically later (after the async fetch/stream below) if
+    // it already played once inside a real user gesture. Reusing this same
+    // element in playSpokenAnswer carries that unlock forward.
+    if (!audioElRef.current) audioElRef.current = new Audio();
+    audioElRef.current.play().catch(() => {});
+    audioElRef.current.pause();
+
     const recognition = new SpeechRecognitionCtor();
     recognition.lang = 'en-US';
     recognition.interimResults = false;
@@ -241,6 +260,7 @@ export default function App() {
   }
 
   function stopListening() {
+    window.clearTimeout(autoListenTimerRef.current);
     recognitionRef.current?.abort();
     recognitionRef.current = null;
     moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
@@ -288,22 +308,44 @@ export default function App() {
   }
 
   async function playSpokenAnswer(text) {
-    // No-op until HUGGINGFACE_API_TOKEN is configured on the Brain side — fetchSpeech
-    // resolves to null in that case, so this silently activates once voice is set up.
+    // No-op until voice is configured on the Brain side — fetchSpeech resolves to
+    // null in that case, so this silently activates once voice is set up.
     const blob = await fetchSpeech(text);
     if (!blob) return;
     const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    audio.addEventListener('ended', () => URL.revokeObjectURL(url));
-    audio.play().catch(() => {});
+    // Reuse the element unlocked in startListening — iOS Safari blocks playback
+    // on a freshly created Audio() this far removed from the original tap gesture.
+    const audio = audioElRef.current || new Audio();
+    audioElRef.current = audio;
+    audio.src = url;
+    audio.addEventListener(
+      'ended',
+      () => {
+        URL.revokeObjectURL(url);
+        // Auto-resume listening once Maxwell finishes speaking, so the
+        // conversation keeps going without another tap. The buffer gives the
+        // speaker's own audio a moment to decay before the mic re-arms, to
+        // cut down on the phone hearing its own playback as the next question.
+        // Only fires if the user hasn't already interrupted or backed out.
+        autoListenTimerRef.current = window.setTimeout(() => {
+          if (voiceStateIndexRef.current === 3) startListening();
+        }, 600);
+      },
+      { once: true },
+    );
+    audio.play().catch((err) => setErrorMessage(`Couldn't play audio: ${err.message}`));
   }
 
   function cycleVoiceState() {
     const currentState = voiceStates[voiceStateIndex].id;
 
     if (currentState === 'responding') {
-      if (currentInsight) toggleInsightBookmark(currentInsight);
-      moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 1600 });
+      // Barge-in: interrupt Maxwell mid-answer (or right after) and go straight
+      // back to listening, rather than making the user wait him out. Saving an
+      // insight is now a separate action (the star button), not tied to this tap.
+      window.clearTimeout(autoListenTimerRef.current);
+      audioElRef.current?.pause();
+      startListening();
       return;
     }
 
