@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import VoiceAppShell from './components/VoiceAppShell.jsx';
+import { startConversation, streamMessage, fetchSpeech, getProfile, saveProfile } from './lib/brainClient.js';
 
 const SKIN_STORAGE_KEY = 'john-maxwell-voice-skin';
 const BOOKMARK_STORAGE_KEY = 'john-maxwell-saved-insights';
+const USER_ID_STORAGE_KEY = 'john-maxwell-user-id';
+const PROFILE_STORAGE_KEY = 'john-maxwell-user-profile';
+const VOICE_ENABLED_STORAGE_KEY = 'john-maxwell-voice-enabled';
 
 const skins = [
   {
@@ -39,52 +43,18 @@ const skins = [
   },
 ];
 
-const demoQuestion = 'How do I become a better leader for my team?';
-const demoResponse =
-  'Leadership begins with influence, not position. When you add value to people, they will follow you anywhere.';
-
 const voiceStates = [
   { id: 'idle', label: 'Ready when you are.', button: 'Tap to speak' },
   { id: 'listening', label: "I'm listening.", button: 'Listening' },
   { id: 'reflecting', label: 'Reflecting...', button: 'Reflecting' },
-  { id: 'responding', label: 'Leadership begins with influence, not position...', button: 'Save insight' },
+  { id: 'responding', label: "Here's my response.", button: 'Tap to interrupt' },
 ];
 
-const journalEntries = [
-  {
-    id: 'accountability',
-    date: 'June 23',
-    title: 'Building Accountability in My Team',
-    duration: '14 min',
-    question: demoQuestion,
-    response: demoResponse,
-    takeaway: 'Add value to your people and you will earn their influence.',
-  },
-  {
-    id: 'conflict',
-    date: 'June 22',
-    title: 'Leading Through Conflict',
-    duration: '18 min',
-    question: 'How do I lead well when the team is divided?',
-    response: 'A leader listens first, brings clarity second, and models the standard before asking for it.',
-    takeaway: 'Conflict can become alignment when the leader protects trust.',
-  },
-  {
-    id: 'communication',
-    date: 'June 18',
-    title: 'Improving Executive Communication',
-    duration: '12 min',
-    question: 'How can I communicate with more executive presence?',
-    response: 'Clarity is kindness. Say what matters, why it matters, and what action comes next.',
-    takeaway: 'Strong communication reduces uncertainty.',
-  },
-];
-
-const defaultInsights = [
-  { id: 'influence', text: 'Leadership is influence.', date: 'June 23' },
-  { id: 'vision', text: 'People buy into the leader before they buy into the vision.', date: 'June 22' },
-  { id: 'growth', text: 'Growth requires intentionality.', date: 'June 18' },
-];
+function getSpeechRecognitionCtor() {
+  return typeof window !== 'undefined'
+    ? window.SpeechRecognition || window.webkitSpeechRecognition || null
+    : null;
+}
 
 function getInitialSkin() {
   const savedSkin = window.localStorage.getItem(SKIN_STORAGE_KEY);
@@ -99,15 +69,54 @@ function getInitialBookmarks() {
   }
 }
 
+function getInitialUserId() {
+  const existing = window.localStorage.getItem(USER_ID_STORAGE_KEY);
+  if (existing) return existing;
+  const id = `u_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+  window.localStorage.setItem(USER_ID_STORAGE_KEY, id);
+  return id;
+}
+
+function getInitialProfile() {
+  try {
+    return JSON.parse(window.localStorage.getItem(PROFILE_STORAGE_KEY)) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function getInitialVoiceEnabled() {
+  const stored = window.localStorage.getItem(VOICE_ENABLED_STORAGE_KEY);
+  return stored === null ? true : stored === 'true';
+}
+
 export default function App() {
   const [selectedSkinId, setSelectedSkinId] = useState(getInitialSkin);
   const [voiceStateIndex, setVoiceStateIndex] = useState(0);
   const [activeSheet, setActiveSheet] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
-  const [selectedJournalId, setSelectedJournalId] = useState(null);
   const [bookmarkedInsights, setBookmarkedInsights] = useState(getInitialBookmarks);
   const [voiceTransition, setVoiceTransition] = useState(null);
   const voiceTransitionTimerRef = useRef(null);
+
+  // Real conversation state (replaces the old scripted demo question/response).
+  const [threadId, setThreadId] = useState(null);
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState("I'm glad you're here. Tap the orb and ask me anything about leadership.");
+  const [currentInsight, setCurrentInsight] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  // Lets Brain personalize conversations across sessions (name, role, tone, etc.)
+  const [userId] = useState(getInitialUserId);
+  const [profile, setProfile] = useState(getInitialProfile);
+  const [voiceEnabled, setVoiceEnabled] = useState(getInitialVoiceEnabled);
+  const micSupported = useMemo(() => Boolean(getSpeechRecognitionCtor()), []);
+  const recognitionRef = useRef(null);
+  const streamAbortRef = useRef(null);
+  const answerRef = useRef('');
+  const audioElRef = useRef(null);
+  const autoListenTimerRef = useRef(null);
+  const voiceStateIndexRef = useRef(voiceStateIndex);
 
   const selectedSkin = useMemo(
     () => skins.find((skin) => skin.id === selectedSkinId) ?? skins[0],
@@ -117,6 +126,10 @@ export default function App() {
   const voiceState = voiceStates[voiceStateIndex];
 
   useEffect(() => {
+    voiceStateIndexRef.current = voiceStateIndex;
+  }, [voiceStateIndex]);
+
+  useEffect(() => {
     window.localStorage.setItem(SKIN_STORAGE_KEY, selectedSkinId);
   }, [selectedSkinId]);
 
@@ -124,12 +137,68 @@ export default function App() {
     window.localStorage.setItem(BOOKMARK_STORAGE_KEY, JSON.stringify(bookmarkedInsights));
   }, [bookmarkedInsights]);
 
+  useEffect(() => {
+    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  }, [profile]);
+
+  useEffect(() => {
+    window.localStorage.setItem(VOICE_ENABLED_STORAGE_KEY, String(voiceEnabled));
+  }, [voiceEnabled]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const serverProfile = await getProfile(userId);
+      if (cancelled || !serverProfile) return;
+      // Server is the durable copy — prefer it over the local cache when it has data
+      // (e.g. localStorage was cleared but Brain still remembers this userId).
+      const hasData = Object.entries(serverProfile).some(([key, value]) => key !== 'userId' && value);
+      if (hasData) setProfile((prev) => ({ ...prev, ...serverProfile }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
   useEffect(
     () => () => {
       window.clearTimeout(voiceTransitionTimerRef.current);
+      window.clearTimeout(autoListenTimerRef.current);
+      recognitionRef.current?.abort();
+      streamAbortRef.current?.abort();
+      audioElRef.current?.pause();
     },
     [],
   );
+
+  useEffect(() => {
+    if (!micSupported) {
+      setErrorMessage("Voice input isn't supported in this browser. Try Chrome, Edge, or Safari.");
+    }
+  }, [micSupported]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { id, openingMessage } = await startConversation({ userId, ...profile });
+        if (cancelled) return;
+        setThreadId(id);
+        setAnswer(openingMessage);
+      } catch {
+        if (!cancelled) {
+          setErrorMessage("Couldn't reach the Maxwell Brain service. Is it running on VITE_BRAIN_API_URL?");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally runs once on mount with whatever profile is cached locally at
+    // that moment — later profile edits apply to the next reply via Brain's own
+    // per-userId lookup, not by restarting the conversation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function moveToVoiceState(nextIndex, transitionName, options = {}) {
     const { delayStateChange = 0, transitionDuration = 700 } = options;
@@ -155,38 +224,171 @@ export default function App() {
     finishTransition();
   }
 
+  function startListening() {
+    const SpeechRecognitionCtor = getSpeechRecognitionCtor();
+    if (!SpeechRecognitionCtor) {
+      setErrorMessage("Voice input isn't supported in this browser. Try Chrome, Edge, or Safari.");
+      return;
+    }
+    if (!threadId) {
+      setErrorMessage("Still connecting to Maxwell Brain — try again in a moment.");
+      return;
+    }
+
+    setErrorMessage(null);
+    window.clearTimeout(autoListenTimerRef.current);
+
+    // Unlock audio playback on iOS Safari: a <audio> element can only start
+    // playing programmatically later (after the async fetch/stream below) if
+    // it already played once inside a real user gesture. Reusing this same
+    // element in playSpokenAnswer carries that unlock forward.
+    if (!audioElRef.current) audioElRef.current = new Audio();
+    audioElRef.current.play().catch(() => {});
+    audioElRef.current.pause();
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognitionRef.current = recognition;
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim();
+      if (!transcript) return;
+      setQuestion(transcript);
+      moveToVoiceState(2, 'listeningToReflecting', { transitionDuration: 360 });
+      sendQuery(transcript);
+    };
+    recognition.onerror = (event) => {
+      if (event.error === 'aborted') return;
+      setErrorMessage(`Voice input error: ${event.error}`);
+      moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
+    };
+    recognition.onend = () => {
+      recognitionRef.current = null;
+    };
+
+    moveToVoiceState(1, 'idleToListening', { transitionDuration: 620 });
+    try {
+      recognition.start();
+    } catch {
+      setErrorMessage("Couldn't start the microphone. Check browser permissions.");
+      moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
+    }
+  }
+
+  function stopListening() {
+    window.clearTimeout(autoListenTimerRef.current);
+    recognitionRef.current?.abort();
+    recognitionRef.current = null;
+    moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
+  }
+
+  async function sendQuery(text) {
+    setAnswer('');
+    answerRef.current = '';
+    setCurrentInsight(null);
+    streamAbortRef.current?.abort();
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
+    let respondingStarted = false;
+
+    try {
+      await streamMessage(threadId, text, {
+        signal: controller.signal,
+        onToken: (token) => {
+          if (!respondingStarted) {
+            respondingStarted = true;
+            moveToVoiceState(3, 'reflectingToResponding', { transitionDuration: 920 });
+          }
+          answerRef.current += token;
+          setAnswer(answerRef.current);
+        },
+        onDone: () => {
+          setCurrentInsight({
+            id: `insight-${threadId}-${Date.now()}`,
+            text: answerRef.current,
+            date: new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric' }),
+          });
+          playSpokenAnswer(answerRef.current);
+        },
+        onError: (message) => {
+          setErrorMessage(message);
+          moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
+        },
+      });
+    } catch (err) {
+      if (err?.name !== 'AbortError') {
+        setErrorMessage(err?.message || 'Something went wrong talking to Maxwell Brain.');
+        moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
+      }
+    }
+  }
+
+  async function playSpokenAnswer(text) {
+    if (!voiceEnabled) return;
+    // No-op until voice is configured on the Brain side — fetchSpeech resolves to
+    // null in that case, so this silently activates once voice is set up.
+    const blob = await fetchSpeech(text);
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    // Reuse the element unlocked in startListening — iOS Safari blocks playback
+    // on a freshly created Audio() this far removed from the original tap gesture.
+    const audio = audioElRef.current || new Audio();
+    audioElRef.current = audio;
+    audio.src = url;
+    audio.addEventListener(
+      'ended',
+      () => {
+        URL.revokeObjectURL(url);
+        // iOS Safari requires SpeechRecognition.start() to trace back to a real
+        // user gesture — a setTimeout-triggered call (no tap involved) silently
+        // fails to actually engage the mic, even though nothing errors. So we
+        // can't auto-resume listening here; instead, return to idle automatically
+        // (skipping the old separate dismiss tap) and let one real tap start the
+        // next turn, same as the reliable first-question flow.
+        // Only fires if the user hasn't already interrupted or backed out.
+        autoListenTimerRef.current = window.setTimeout(() => {
+          if (voiceStateIndexRef.current === 3) moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
+        }, 600);
+      },
+      { once: true },
+    );
+    audio.play().catch((err) => setErrorMessage(`Couldn't play audio: ${err.message}`));
+  }
+
   function cycleVoiceState() {
     const currentState = voiceStates[voiceStateIndex].id;
 
     if (currentState === 'responding') {
-      toggleInsightBookmark({
-        id: 'demo-response',
-        text: 'Leadership begins with influence, not position.',
-        date: 'June 23',
-      });
-      moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 1600 });
+      // Barge-in: interrupt Maxwell mid-answer (or right after) and go straight
+      // back to listening, rather than making the user wait him out. Saving an
+      // insight is now a separate action (the star button), not tied to this tap.
+      window.clearTimeout(autoListenTimerRef.current);
+      audioElRef.current?.pause();
+      startListening();
       return;
     }
 
     if (currentState === 'idle') {
-      moveToVoiceState(1, 'idleToListening', { transitionDuration: 620 });
+      startListening();
       return;
     }
 
     if (currentState === 'listening') {
-      moveToVoiceState(2, 'listeningToReflecting', {
-        delayStateChange: 760,
-        transitionDuration: 360,
-      });
+      stopListening();
       return;
     }
 
     if (currentState === 'reflecting') {
-      moveToVoiceState(3, 'reflectingToResponding', { transitionDuration: 920 });
+      streamAbortRef.current?.abort();
+      moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
       return;
     }
+  }
 
-    setVoiceStateIndex((currentIndex) => (currentIndex + 1) % voiceStates.length);
+  function saveCurrentInsight() {
+    if (currentInsight) toggleInsightBookmark(currentInsight);
   }
 
   function toggleInsightBookmark(insight) {
@@ -198,15 +400,30 @@ export default function App() {
     });
   }
 
+  function handleSaveProfile(updates) {
+    const next = { ...profile, ...updates, userId };
+    setProfile(next);
+    saveProfile(next);
+  }
+
+  function handleToggleVoiceEnabled() {
+    setVoiceEnabled((current) => !current);
+  }
+
   return (
     <VoiceAppShell
       activeTab={activeTab}
-      selectedJournalId={selectedJournalId}
-      journalEntries={journalEntries}
-      defaultInsights={defaultInsights}
       bookmarkedInsights={bookmarkedInsights}
-      demoQuestion={demoQuestion}
-      demoResponse={demoResponse}
+      demoQuestion={question}
+      demoResponse={answer}
+      currentInsightId={currentInsight?.id}
+      errorMessage={errorMessage}
+      profile={profile}
+      userId={userId}
+      onSaveProfile={handleSaveProfile}
+      onProfileUpdated={setProfile}
+      voiceEnabled={voiceEnabled}
+      onToggleVoiceEnabled={handleToggleVoiceEnabled}
       skin={selectedSkin}
       skins={skins}
       voiceState={voiceState}
@@ -218,15 +435,9 @@ export default function App() {
       onOpenSettings={() => setActiveSheet('settings')}
       onCloseSelector={() => setActiveSheet(null)}
       onSelectSkin={setSelectedSkinId}
-      onSelectTab={(tabId) => {
-        setActiveTab(tabId);
-        if (tabId !== 'journal') {
-          setSelectedJournalId(null);
-        }
-      }}
-      onSelectJournal={setSelectedJournalId}
-      onBackToJournal={() => setSelectedJournalId(null)}
+      onSelectTab={setActiveTab}
       onToggleInsight={toggleInsightBookmark}
+      onSaveCurrentInsight={saveCurrentInsight}
       onSelectVoiceState={(stateId) => {
         window.clearTimeout(voiceTransitionTimerRef.current);
         setVoiceTransition(null);

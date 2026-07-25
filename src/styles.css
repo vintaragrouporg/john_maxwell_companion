@@ -196,10 +196,13 @@ button {
 }
 
 .visualStage {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 36%;
   z-index: 1;
   display: grid;
-  min-height: 0;
   place-items: center;
   padding: 22px 16px 8px;
   touch-action: manipulation;
@@ -737,18 +740,33 @@ button {
 .homeScreen {
   position: relative;
   z-index: 2;
-  display: grid;
-  grid-template-rows: minmax(220px, 1fr) auto;
   min-height: 0;
 }
 
 .voicePanel {
-  position: relative;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 2;
-  display: grid;
-  justify-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
   gap: 21px;
-  padding: 0 24px 12px 24px;
+  height: 38%;
+  padding: 28px 24px 12px 24px;
+  background: linear-gradient(
+    to top,
+    rgba(9, 6, 3, 0.97) 0%,
+    rgba(9, 6, 3, 0.97) 70%,
+    rgba(9, 6, 3, 0) 100%
+  );
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  /* Safety net: growing response text must scroll within its own area (below),
+     never bleed outside this fixed-height dock and back over the orb. */
+  overflow: hidden;
 }
 
 .stateCopy {
@@ -759,6 +777,14 @@ button {
   line-height: 1.3;
   text-align: center;
   text-shadow: 0 0 22px color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+.errorCopy {
+  margin: 0;
+  color: #ff9d9d;
+  font-size: 0.85rem;
+  text-align: center;
+  max-width: 320px;
 }
 
 .speakButton {
@@ -790,6 +816,8 @@ button {
   display: grid;
   width: min(100%, 304px);
   gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .conversationCard {
@@ -1906,6 +1934,10 @@ button {
   font-size: 0.72rem;
 }
 
+.savedHighlightsSection {
+  margin-top: 26px;
+}
+
 .journalList,
 .insightList,
 .settingsList,
@@ -2072,6 +2104,139 @@ button {
   text-align: right;
 }
 
+.profileForm {
+  display: grid;
+  width: 100%;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.formField {
+  display: grid;
+  gap: 6px;
+}
+
+.formField span {
+  color: rgba(248, 231, 189, 0.58);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.formField input,
+.formField textarea {
+  width: 100%;
+  border: 1px solid rgba(255, 225, 160, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 10px 12px;
+  color: rgba(255, 242, 211, 0.92);
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: none;
+}
+
+.formField input::placeholder,
+.formField textarea::placeholder {
+  color: rgba(248, 231, 189, 0.3);
+}
+
+.formField input:focus,
+.formField textarea:focus {
+  outline: none;
+  border-color: rgba(255, 196, 92, 0.5);
+}
+
+.formSegmentGroup {
+  display: grid;
+  gap: 6px;
+}
+
+.formSegmentGroup > span {
+  color: rgba(248, 231, 189, 0.58);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.segmentedControl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.segmentedControl button {
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 225, 160, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 242, 211, 0.7);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.segmentedControl button.isActive {
+  border-color: rgba(255, 196, 92, 0.5);
+  background: rgba(255, 196, 92, 0.12);
+  color: #ffe1a0;
+}
+
+.profileSaveButton {
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid rgba(255, 225, 160, 0.18);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 210, 128, 0.08), transparent), rgba(0, 0, 0, 0.16);
+  color: #ffe6b5;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.profileSaveButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.narrativeBlock {
+  margin-bottom: 14px;
+}
+
+.narrativeBlock p {
+  white-space: pre-line;
+}
+
+.learnedBlock {
+  margin-bottom: 14px;
+  border-color: rgba(255, 196, 92, 0.32);
+  background:
+    linear-gradient(135deg, rgba(255, 196, 92, 0.1), transparent),
+    rgba(255, 255, 255, 0.035);
+}
+
+.learnedBlock p {
+  margin: 0;
+  color: #ffe1a0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.reflectionForm {
+  margin-bottom: 0;
+}
+
+.reflectionQuestion {
+  margin: 4px 0 8px;
+  color: rgba(255, 242, 211, 0.94);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
 .bottomNav {
   position: relative;
   z-index: 4;
@@ -2108,10 +2273,6 @@ button {
 
 .state-responding .visualStage {
   transform: none;
-}
-
-.state-responding .homeScreen {
-  grid-template-rows: minmax(150px, 0.72fr) auto;
 }
 
 .state-responding .homeVoicePanel {
