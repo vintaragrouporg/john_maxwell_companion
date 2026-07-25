@@ -1,54 +1,69 @@
-export default function JournalScreen({
-  entries,
-  selectedEntryId,
-  onSelectEntry,
-  onBack,
-  onToggleInsight,
-  savedInsights,
-}) {
-  const selectedEntry = entries.find((entry) => entry.id === selectedEntryId);
+import { useEffect, useState } from 'react';
+import { listConversations, getThread } from '../lib/brainClient.js';
 
-  if (selectedEntry) {
-    const saved = savedInsights.some((insight) => insight.id === `journal-${selectedEntry.id}`);
+export default function JournalScreen({ userId, bookmarkedInsights, onToggleInsight }) {
+  const [threads, setThreads] = useState(null); // null = still loading
+  const [selectedThreadId, setSelectedThreadId] = useState(null);
+  const [selectedThread, setSelectedThread] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const all = await listConversations(userId);
+      if (!cancelled) setThreads(all.filter((t) => t.userTurnCount > 0));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  async function openThread(id) {
+    setSelectedThreadId(id);
+    setLoadingDetail(true);
+    const thread = await getThread(id);
+    setSelectedThread(thread);
+    setLoadingDetail(false);
+  }
+
+  function backToList() {
+    setSelectedThreadId(null);
+    setSelectedThread(null);
+  }
+
+  if (selectedThreadId) {
     return (
       <section className="productScreen journalDetailScreen">
         <div className="screenHeading detailHeading">
-          <button className="backButton" type="button" onClick={onBack} aria-label="Back to journal">
+          <button className="backButton" type="button" onClick={backToList} aria-label="Back to journal">
             ‹
           </button>
           <div>
-            <p className="eyebrow">Conversation detail</p>
-            <h2>{selectedEntry.title}</h2>
-            <span>{selectedEntry.date} · {selectedEntry.duration}</span>
+            <p className="eyebrow">Conversation</p>
+            <h2>{selectedThread ? formatDate(selectedThread.createdAt) : 'Loading…'}</h2>
           </div>
         </div>
 
-        <div className="detailStack">
-          <DetailBlock label="You asked" text={selectedEntry.question} />
-          <article className="detailBlock maxwellBlock">
-            <div>
-              <span>John Maxwell</span>
-              <button
-                className={`bookmarkButton ${saved ? 'isSaved' : ''}`}
-                type="button"
-                aria-label="Save journal insight"
-                onClick={() =>
-                  onToggleInsight({
-                    id: `journal-${selectedEntry.id}`,
-                    text: selectedEntry.takeaway,
-                    date: selectedEntry.date,
-                  })
-                }
-              >
-                ☆
-              </button>
-            </div>
-            <p>{selectedEntry.response}</p>
+        {loadingDetail && (
+          <article className="detailBlock">
+            <p>Loading…</p>
           </article>
-          <DetailBlock label="Key takeaway" text={selectedEntry.takeaway} />
-          <DetailBlock label="Action step" text="Identify one leadership behavior you can model this week." />
-        </div>
+        )}
+
+        {selectedThread && (
+          <div className="detailStack">
+            {selectedThread.messages.map((msg, i) =>
+              msg.role === 'user' ? (
+                <DetailBlock key={i} label="You asked" text={msg.content} />
+              ) : (
+                <article key={i} className="detailBlock maxwellBlock">
+                  <span>John Maxwell</span>
+                  <p>{msg.content}</p>
+                </article>
+              ),
+            )}
+          </div>
+        )}
       </section>
     );
   }
@@ -60,17 +75,61 @@ export default function JournalScreen({
         <h2>Previous conversations</h2>
       </div>
 
-      <div className="journalList">
-        {entries.map((entry) => (
-          <button key={entry.id} className="journalEntry" type="button" onClick={() => onSelectEntry(entry.id)}>
-            <span className="entryIcon">◇</span>
-            <span>
-              <small>{entry.date} · {entry.duration}</small>
-              <strong>{entry.title}</strong>
-            </span>
-          </button>
-        ))}
-      </div>
+      {threads === null && (
+        <article className="detailBlock">
+          <p>Loading your conversations…</p>
+        </article>
+      )}
+
+      {threads !== null && threads.length === 0 && (
+        <article className="detailBlock">
+          <p>No conversations yet — ask Maxwell something on the Home tab to get started.</p>
+        </article>
+      )}
+
+      {threads !== null && threads.length > 0 && (
+        <div className="journalList">
+          {threads.map((t) => (
+            <button key={t.id} className="journalEntry" type="button" onClick={() => openThread(t.id)}>
+              <span className="entryIcon">◇</span>
+              <span>
+                <small>
+                  {formatDate(t.createdAt)} · {t.userTurnCount} exchange{t.userTurnCount === 1 ? '' : 's'}
+                </small>
+                <strong>Conversation</strong>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {bookmarkedInsights.length > 0 && (
+        <section className="savedHighlightsSection">
+          <div className="screenHeading">
+            <p className="eyebrow">Saved highlights</p>
+            <h2>Moments worth revisiting</h2>
+          </div>
+          <div className="insightList">
+            {bookmarkedInsights.map((insight) => (
+              <article key={insight.id} className="insightCard">
+                <div>
+                  <span>&ldquo;</span>
+                  <button
+                    className="bookmarkButton isSaved"
+                    type="button"
+                    aria-label="Remove saved insight"
+                    onClick={() => onToggleInsight(insight)}
+                  >
+                    ☆
+                  </button>
+                </div>
+                <p>{insight.text}</p>
+                <small>{insight.date}</small>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
     </section>
   );
 }
@@ -82,4 +141,9 @@ function DetailBlock({ label, text }) {
       <p>{text}</p>
     </article>
   );
+}
+
+function formatDate(timestamp) {
+  if (!timestamp) return '';
+  return new Date(timestamp).toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
 }

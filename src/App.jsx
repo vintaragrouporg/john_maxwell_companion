@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import VoiceAppShell from './components/VoiceAppShell.jsx';
-import { startConversation, streamMessage, fetchSpeech } from './lib/brainClient.js';
+import { startConversation, streamMessage, fetchSpeech, getProfile, saveProfile } from './lib/brainClient.js';
 
 const SKIN_STORAGE_KEY = 'john-maxwell-voice-skin';
 const BOOKMARK_STORAGE_KEY = 'john-maxwell-saved-insights';
+const USER_ID_STORAGE_KEY = 'john-maxwell-user-id';
+const PROFILE_STORAGE_KEY = 'john-maxwell-user-profile';
+const VOICE_ENABLED_STORAGE_KEY = 'john-maxwell-voice-enabled';
 
 const skins = [
   {
@@ -53,43 +56,6 @@ function getSpeechRecognitionCtor() {
     : null;
 }
 
-const journalEntries = [
-  {
-    id: 'accountability',
-    date: 'June 23',
-    title: 'Building Accountability in My Team',
-    duration: '14 min',
-    question: 'How do I become a better leader for my team?',
-    response:
-      'Leadership begins with influence, not position. When you add value to people, they will follow you anywhere.',
-    takeaway: 'Add value to your people and you will earn their influence.',
-  },
-  {
-    id: 'conflict',
-    date: 'June 22',
-    title: 'Leading Through Conflict',
-    duration: '18 min',
-    question: 'How do I lead well when the team is divided?',
-    response: 'A leader listens first, brings clarity second, and models the standard before asking for it.',
-    takeaway: 'Conflict can become alignment when the leader protects trust.',
-  },
-  {
-    id: 'communication',
-    date: 'June 18',
-    title: 'Improving Executive Communication',
-    duration: '12 min',
-    question: 'How can I communicate with more executive presence?',
-    response: 'Clarity is kindness. Say what matters, why it matters, and what action comes next.',
-    takeaway: 'Strong communication reduces uncertainty.',
-  },
-];
-
-const defaultInsights = [
-  { id: 'influence', text: 'Leadership is influence.', date: 'June 23' },
-  { id: 'vision', text: 'People buy into the leader before they buy into the vision.', date: 'June 22' },
-  { id: 'growth', text: 'Growth requires intentionality.', date: 'June 18' },
-];
-
 function getInitialSkin() {
   const savedSkin = window.localStorage.getItem(SKIN_STORAGE_KEY);
   return skins.some((skin) => skin.id === savedSkin) ? savedSkin : 'circle';
@@ -103,12 +69,32 @@ function getInitialBookmarks() {
   }
 }
 
+function getInitialUserId() {
+  const existing = window.localStorage.getItem(USER_ID_STORAGE_KEY);
+  if (existing) return existing;
+  const id = `u_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+  window.localStorage.setItem(USER_ID_STORAGE_KEY, id);
+  return id;
+}
+
+function getInitialProfile() {
+  try {
+    return JSON.parse(window.localStorage.getItem(PROFILE_STORAGE_KEY)) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function getInitialVoiceEnabled() {
+  const stored = window.localStorage.getItem(VOICE_ENABLED_STORAGE_KEY);
+  return stored === null ? true : stored === 'true';
+}
+
 export default function App() {
   const [selectedSkinId, setSelectedSkinId] = useState(getInitialSkin);
   const [voiceStateIndex, setVoiceStateIndex] = useState(0);
   const [activeSheet, setActiveSheet] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
-  const [selectedJournalId, setSelectedJournalId] = useState(null);
   const [bookmarkedInsights, setBookmarkedInsights] = useState(getInitialBookmarks);
   const [voiceTransition, setVoiceTransition] = useState(null);
   const voiceTransitionTimerRef = useRef(null);
@@ -119,6 +105,11 @@ export default function App() {
   const [answer, setAnswer] = useState("I'm glad you're here. Tap the orb and ask me anything about leadership.");
   const [currentInsight, setCurrentInsight] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+
+  // Lets Brain personalize conversations across sessions (name, role, tone, etc.)
+  const [userId] = useState(getInitialUserId);
+  const [profile, setProfile] = useState(getInitialProfile);
+  const [voiceEnabled, setVoiceEnabled] = useState(getInitialVoiceEnabled);
   const micSupported = useMemo(() => Boolean(getSpeechRecognitionCtor()), []);
   const recognitionRef = useRef(null);
   const streamAbortRef = useRef(null);
@@ -146,6 +137,29 @@ export default function App() {
     window.localStorage.setItem(BOOKMARK_STORAGE_KEY, JSON.stringify(bookmarkedInsights));
   }, [bookmarkedInsights]);
 
+  useEffect(() => {
+    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  }, [profile]);
+
+  useEffect(() => {
+    window.localStorage.setItem(VOICE_ENABLED_STORAGE_KEY, String(voiceEnabled));
+  }, [voiceEnabled]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const serverProfile = await getProfile(userId);
+      if (cancelled || !serverProfile) return;
+      // Server is the durable copy — prefer it over the local cache when it has data
+      // (e.g. localStorage was cleared but Brain still remembers this userId).
+      const hasData = Object.entries(serverProfile).some(([key, value]) => key !== 'userId' && value);
+      if (hasData) setProfile((prev) => ({ ...prev, ...serverProfile }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
   useEffect(
     () => () => {
       window.clearTimeout(voiceTransitionTimerRef.current);
@@ -167,7 +181,7 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const { id, openingMessage } = await startConversation();
+        const { id, openingMessage } = await startConversation({ userId, ...profile });
         if (cancelled) return;
         setThreadId(id);
         setAnswer(openingMessage);
@@ -180,6 +194,10 @@ export default function App() {
     return () => {
       cancelled = true;
     };
+    // Intentionally runs once on mount with whatever profile is cached locally at
+    // that moment — later profile edits apply to the next reply via Brain's own
+    // per-userId lookup, not by restarting the conversation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function moveToVoiceState(nextIndex, transitionName, options = {}) {
@@ -308,6 +326,7 @@ export default function App() {
   }
 
   async function playSpokenAnswer(text) {
+    if (!voiceEnabled) return;
     // No-op until voice is configured on the Brain side — fetchSpeech resolves to
     // null in that case, so this silently activates once voice is set up.
     const blob = await fetchSpeech(text);
@@ -322,13 +341,15 @@ export default function App() {
       'ended',
       () => {
         URL.revokeObjectURL(url);
-        // Auto-resume listening once Maxwell finishes speaking, so the
-        // conversation keeps going without another tap. The buffer gives the
-        // speaker's own audio a moment to decay before the mic re-arms, to
-        // cut down on the phone hearing its own playback as the next question.
+        // iOS Safari requires SpeechRecognition.start() to trace back to a real
+        // user gesture — a setTimeout-triggered call (no tap involved) silently
+        // fails to actually engage the mic, even though nothing errors. So we
+        // can't auto-resume listening here; instead, return to idle automatically
+        // (skipping the old separate dismiss tap) and let one real tap start the
+        // next turn, same as the reliable first-question flow.
         // Only fires if the user hasn't already interrupted or backed out.
         autoListenTimerRef.current = window.setTimeout(() => {
-          if (voiceStateIndexRef.current === 3) startListening();
+          if (voiceStateIndexRef.current === 3) moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
         }, 600);
       },
       { once: true },
@@ -379,17 +400,30 @@ export default function App() {
     });
   }
 
+  function handleSaveProfile(updates) {
+    const next = { ...profile, ...updates, userId };
+    setProfile(next);
+    saveProfile(next);
+  }
+
+  function handleToggleVoiceEnabled() {
+    setVoiceEnabled((current) => !current);
+  }
+
   return (
     <VoiceAppShell
       activeTab={activeTab}
-      selectedJournalId={selectedJournalId}
-      journalEntries={journalEntries}
-      defaultInsights={defaultInsights}
       bookmarkedInsights={bookmarkedInsights}
       demoQuestion={question}
       demoResponse={answer}
       currentInsightId={currentInsight?.id}
       errorMessage={errorMessage}
+      profile={profile}
+      userId={userId}
+      onSaveProfile={handleSaveProfile}
+      onProfileUpdated={setProfile}
+      voiceEnabled={voiceEnabled}
+      onToggleVoiceEnabled={handleToggleVoiceEnabled}
       skin={selectedSkin}
       skins={skins}
       voiceState={voiceState}
@@ -401,14 +435,7 @@ export default function App() {
       onOpenSettings={() => setActiveSheet('settings')}
       onCloseSelector={() => setActiveSheet(null)}
       onSelectSkin={setSelectedSkinId}
-      onSelectTab={(tabId) => {
-        setActiveTab(tabId);
-        if (tabId !== 'journal') {
-          setSelectedJournalId(null);
-        }
-      }}
-      onSelectJournal={setSelectedJournalId}
-      onBackToJournal={() => setSelectedJournalId(null)}
+      onSelectTab={setActiveTab}
       onToggleInsight={toggleInsightBookmark}
       onSaveCurrentInsight={saveCurrentInsight}
       onSelectVoiceState={(stateId) => {

@@ -23,6 +23,75 @@ export async function checkHealth() {
   return res.json();
 }
 
+export async function getProfile(userId) {
+  try {
+    const res = await fetch(`${API_URL}/profile?userId=${encodeURIComponent(userId)}`, { headers: headers() });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.profile ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveProfile(profile) {
+  try {
+    const res = await fetch(`${API_URL}/profile`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(profile),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Insights Q&A: submits one answer, returns what Brain learned from it (structured
+// profile field updates plus the freshly rewritten narrative).
+export async function submitReflection(userId, questionId, question, answer) {
+  const res = await fetch(`${API_URL}/profile/reflect`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ userId, questionId, question, answer }),
+  });
+  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  return res.json(); // { profileUpdates, narrative, profile }
+}
+
+export async function getReflectionAnswers(userId) {
+  try {
+    const res = await fetch(`${API_URL}/profile/reflect?userId=${encodeURIComponent(userId)}`, { headers: headers() });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data?.answers ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function listConversations(userId) {
+  try {
+    const res = await fetch(`${API_URL}/conversation?userId=${encodeURIComponent(userId)}`, { headers: headers() });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data?.threads ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getThread(id) {
+  try {
+    const res = await fetch(`${API_URL}/conversation/${encodeURIComponent(id)}`, { headers: headers() });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.thread ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function startConversation(profile) {
   const res = await fetch(`${API_URL}/conversation/start`, {
     method: 'POST',

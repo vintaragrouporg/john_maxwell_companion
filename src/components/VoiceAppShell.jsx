@@ -19,14 +19,17 @@ const visualBySkin = {
 
 export default function VoiceAppShell({
   activeTab,
-  selectedJournalId,
-  journalEntries,
-  defaultInsights,
   bookmarkedInsights,
   demoQuestion,
   demoResponse,
   currentInsightId,
   errorMessage,
+  userId,
+  profile,
+  onSaveProfile,
+  onProfileUpdated,
+  voiceEnabled,
+  onToggleVoiceEnabled,
   skin,
   skins,
   voiceState,
@@ -39,8 +42,6 @@ export default function VoiceAppShell({
   onCloseSelector,
   onSelectSkin,
   onSelectTab,
-  onSelectJournal,
-  onBackToJournal,
   onToggleInsight,
   onSaveCurrentInsight,
   onSelectVoiceState,
@@ -90,26 +91,22 @@ export default function VoiceAppShell({
         )}
 
         {activeTab === 'journal' && (
-          <JournalScreen
-            entries={journalEntries}
-            selectedEntryId={selectedJournalId}
-            onSelectEntry={onSelectJournal}
-            onBack={onBackToJournal}
-            onToggleInsight={onToggleInsight}
-            savedInsights={bookmarkedInsights}
-          />
+          <JournalScreen userId={userId} bookmarkedInsights={bookmarkedInsights} onToggleInsight={onToggleInsight} />
         )}
 
         {activeTab === 'insights' && (
-          <InsightsScreen
-            defaultInsights={defaultInsights}
-            savedInsights={bookmarkedInsights}
-            onToggleInsight={onToggleInsight}
-          />
+          <InsightsScreen userId={userId} profile={profile} onProfileUpdated={onProfileUpdated} />
         )}
 
         {activeTab === 'profile' && (
-          <ProfileScreen skin={skin} onOpenSelector={onOpenSelector} onOpenSettings={onOpenSettings} />
+          <ProfileScreen
+            skin={skin}
+            onOpenSelector={onOpenSelector}
+            profile={profile}
+            onSaveProfile={onSaveProfile}
+            voiceEnabled={voiceEnabled}
+            onToggleVoiceEnabled={onToggleVoiceEnabled}
+          />
         )}
 
         <BottomNav activeTab={activeTab} onSelectTab={onSelectTab} />
@@ -145,6 +142,10 @@ function HomeScreen({
   const [isHeroPressed, setIsHeroPressed] = useState(false);
   const showTranscript = ['reflecting', 'responding'].includes(voiceState.id) && demoQuestion;
   const showResponse = voiceState.id === 'responding';
+  // Before the first real question, "responding" never happens — surface Maxwell's
+  // personalized opening greeting (loaded on mount) right in the idle state instead
+  // of leaving it fetched-but-never-shown.
+  const showGreeting = voiceState.id === 'idle' && !demoQuestion && demoResponse;
 
   return (
     <section className="homeScreen">
@@ -170,6 +171,15 @@ function HomeScreen({
         <VoiceWaveform skin={skin.id} state={voiceState.id} />
 
         <div className="conversationPreview">
+          {showGreeting && (
+            <article className="conversationCard responseCard">
+              <div>
+                <span>John Maxwell</span>
+              </div>
+              <p>{demoResponse}</p>
+            </article>
+          )}
+
           {showTranscript && (
             <article className="conversationCard transcriptCard">
               <span>You asked</span>
