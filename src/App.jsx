@@ -1,6 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import VoiceAppShell from './components/VoiceAppShell.jsx';
-import { startConversation, streamMessage, fetchSpeech, getProfile, saveProfile } from './lib/brainClient.js';
+import {
+  startConversation,
+  streamMessage,
+  fetchSpeech,
+  getProfile,
+  saveProfile,
+  listConversations,
+  getThread,
+  getSavedInsights,
+  saveInsight,
+  deleteInsight,
+} from './lib/brainClient.js';
+
+// How long an idle conversation is still considered "the same sitting" and
+// resumed on reload, vs. treated as a genuine return visit that gets Brain's
+// personalized re-engagement opener (goal check-in / coaching summary recap)
+// instead of silently dropping back into old context.
+const RESUME_WINDOW_MS = 4 * 60 * 60 * 1000;
 
 const SKIN_STORAGE_KEY = 'john-maxwell-voice-skin';
 const BOOKMARK_STORAGE_KEY = 'john-maxwell-saved-insights';
@@ -139,6 +156,33 @@ export default function App() {
   }, [bookmarkedInsights]);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const serverInsights = await getSavedInsights(userId);
+      if (cancelled) return;
+      if (serverInsights.length > 0) {
+        setBookmarkedInsights(
+          serverInsights.map((i) => ({
+            id: i.id,
+            text: i.text,
+            date: new Date(i.createdAt * 1000).toLocaleDateString(undefined, { month: 'long', day: 'numeric' }),
+          })),
+        );
+      } else if (bookmarkedInsights.length > 0) {
+        // One-time migration: this browser has local-only bookmarks from before
+        // server sync existed. Push them up so they're not orphaned.
+        bookmarkedInsights.forEach((insight) => saveInsight(userId, insight.id, insight.text));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Runs once on mount to hydrate/migrate; toggleInsightBookmark keeps things
+    // in sync from then on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  useEffect(() => {
     window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
   }, [profile]);
 
@@ -182,6 +226,20 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
+        const recentThreads = await listConversations(userId);
+        const resumable = recentThreads.find(
+          (t) => t.userTurnCount > 0 && Date.now() - t.updatedAt < RESUME_WINDOW_MS,
+        );
+        if (resumable) {
+          const thread = await getThread(resumable.id);
+          if (thread) {
+            if (cancelled) return;
+            const lastAssistant = [...thread.messages].reverse().find((m) => m.role === 'assistant');
+            setThreadId(thread.id);
+            setAnswer(lastAssistant?.content || "Welcome back — let's keep going.");
+            return;
+          }
+        }
         const { id, openingMessage } = await startConversation({ userId, ...profile });
         if (cancelled) return;
         setThreadId(id);
@@ -410,9 +468,15 @@ export default function App() {
   }
 
   function toggleInsightBookmark(insight) {
+    const exists = bookmarkedInsights.some((item) => item.id === insight.id);
+    if (exists) {
+      deleteInsight(userId, insight.id);
+    } else {
+      saveInsight(userId, insight.id, insight.text);
+    }
     setBookmarkedInsights((currentInsights) => {
-      const exists = currentInsights.some((item) => item.id === insight.id);
-      return exists
+      const stillExists = currentInsights.some((item) => item.id === insight.id);
+      return stillExists
         ? currentInsights.filter((item) => item.id !== insight.id)
         : [insight, ...currentInsights];
     });

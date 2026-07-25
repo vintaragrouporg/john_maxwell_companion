@@ -197,6 +197,40 @@ export async function setGoalStatus(goalId, status) {
 // Requests spoken audio for `text`. Returns null (rather than throwing) when
 // voice isn't configured on the backend (no HUGGINGFACE_API_TOKEN) or the
 // request otherwise fails, so callers can just skip playback.
+export async function getSavedInsights(userId) {
+  try {
+    const res = await fetch(`${API_URL}/insights?userId=${encodeURIComponent(userId)}`, { headers: headers() });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data?.insights ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveInsight(userId, id, text) {
+  try {
+    await fetch(`${API_URL}/insights`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ userId, id, text }),
+    });
+  } catch {
+    // Non-critical — the bookmark still applies locally even if the sync fails.
+  }
+}
+
+export async function deleteInsight(userId, id) {
+  try {
+    await fetch(`${API_URL}/insights/${encodeURIComponent(id)}?userId=${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+      headers: headers(),
+    });
+  } catch {
+    // Non-critical
+  }
+}
+
 export async function fetchSpeech(text, format = 'mp3') {
   try {
     const res = await fetch(`${API_URL}/tts`, {
