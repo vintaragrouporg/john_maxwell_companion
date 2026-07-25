@@ -2270,6 +2270,31 @@ button {
   cursor: pointer;
 }
 
+.dangerButton {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(255, 108, 92, 0.4);
+  border-radius: 999px;
+  background: rgba(255, 108, 92, 0.1);
+  color: #ff9d8c;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.dangerButton.isConfirming {
+  border-color: rgba(255, 90, 72, 0.8);
+  background: rgba(255, 90, 72, 0.28);
+  color: #ffe6e2;
+}
+
+.dangerButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .bottomNav {
   position: relative;
   z-index: 4;

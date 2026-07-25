@@ -403,9 +403,14 @@ export default function App() {
 
   async function playSpokenAnswer(text) {
     if (!voiceEnabled) return;
+    const { blob, error } = await fetchSpeech(text);
+    if (error) {
+      setErrorMessage(`Couldn't play audio: ${error}`);
+      return;
+    }
     // No-op until voice is configured on the Brain side — fetchSpeech resolves to
-    // null in that case, so this silently activates once voice is set up.
-    const blob = await fetchSpeech(text);
+    // a null blob with no error in that case, so this silently activates once
+    // voice is set up, with no code changes needed here.
     if (!blob) return;
     const url = URL.createObjectURL(blob);
     // Reuse the element unlocked in startListening — iOS Safari blocks playback
@@ -492,6 +497,16 @@ export default function App() {
     setVoiceEnabled((current) => !current);
   }
 
+  function handleDataDeleted() {
+    // The server-side data is already gone at this point — clear everything
+    // identity-related locally too and reload as a brand new anonymous user.
+    // Cosmetic prefs (skin, voice on/off) aren't personal data, so they're left.
+    window.localStorage.removeItem(USER_ID_STORAGE_KEY);
+    window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+    window.localStorage.removeItem(BOOKMARK_STORAGE_KEY);
+    window.location.reload();
+  }
+
   return (
     <VoiceAppShell
       activeTab={activeTab}
@@ -505,6 +520,7 @@ export default function App() {
       userId={userId}
       onSaveProfile={handleSaveProfile}
       onProfileUpdated={setProfile}
+      onDataDeleted={handleDataDeleted}
       voiceEnabled={voiceEnabled}
       onToggleVoiceEnabled={handleToggleVoiceEnabled}
       skin={selectedSkin}

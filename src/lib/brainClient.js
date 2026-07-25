@@ -231,6 +231,22 @@ export async function deleteInsight(userId, id) {
   }
 }
 
+// Permanently wipes everything Brain knows about this user — profile, goals,
+// reflections, saved insights, and every conversation thread.
+export async function deleteAllData(userId) {
+  const res = await fetch(`${API_URL}/user-data?userId=${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+    headers: headers(),
+  });
+  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  return res.json();
+}
+
+// Returns { blob, error }. `error` is null both on success AND when voice simply
+// isn't configured server-side (TTS_NOT_CONFIGURED) — that's an expected, silent
+// state, not a failure. Any other failure (rate limit, network, ElevenLabs error)
+// populates `error` so the caller can actually tell the user what happened,
+// instead of voice just mysteriously not playing.
 export async function fetchSpeech(text, format = 'mp3') {
   try {
     const res = await fetch(`${API_URL}/tts`, {
@@ -238,9 +254,19 @@ export async function fetchSpeech(text, format = 'mp3') {
       headers: headers(),
       body: JSON.stringify({ text, format }),
     });
-    if (!res.ok) return null;
-    return await res.blob();
+    if (res.ok) return { blob: await res.blob(), error: null };
+    let code = null;
+    let message = `Request failed (${res.status})`;
+    try {
+      const body = await res.json();
+      code = body?.error?.code;
+      message = body?.error?.message || message;
+    } catch {
+      // non-JSON error body — keep the generic message
+    }
+    if (code === 'TTS_NOT_CONFIGURED') return { blob: null, error: null };
+    return { blob: null, error: message };
   } catch {
-    return null;
+    return { blob: null, error: "Couldn't reach the voice service." };
   }
 }

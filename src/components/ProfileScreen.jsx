@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getGoals, createGoal, setGoalStatus } from '../lib/brainClient.js';
+import { getGoals, createGoal, setGoalStatus, deleteAllData } from '../lib/brainClient.js';
 
 const TONE_OPTIONS = [
   { id: 'direct', label: 'Direct' },
@@ -19,9 +19,27 @@ export default function ProfileScreen({
   onSaveProfile,
   voiceEnabled,
   onToggleVoiceEnabled,
+  onDataDeleted,
 }) {
   const [activeSection, setActiveSection] = useState(null);
   const backToProfile = () => setActiveSection(null);
+
+  if (activeSection === 'delete') {
+    return (
+      <section className="productScreen">
+        <div className="screenHeading detailHeading">
+          <button className="backButton" type="button" onClick={backToProfile} aria-label="Back to profile">
+            ‹
+          </button>
+          <div>
+            <p className="eyebrow">Settings</p>
+            <h2>Delete My Data</h2>
+          </div>
+        </div>
+        <DeleteDataSection userId={userId} onDataDeleted={onDataDeleted} />
+      </section>
+    );
+  }
 
   if (activeSection === 'goals') {
     return (
@@ -132,8 +150,56 @@ export default function ProfileScreen({
           <span>About John Maxwell</span>
           <strong>Leadership. Impact. Growth.</strong>
         </button>
+        <button className="settingsRow" type="button" onClick={() => setActiveSection('delete')}>
+          <span>Delete My Data</span>
+          <strong>Permanent</strong>
+        </button>
       </div>
     </section>
+  );
+}
+
+function DeleteDataSection({ userId, onDataDeleted }) {
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function handleDelete() {
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteAllData(userId);
+      onDataDeleted();
+    } catch (err) {
+      setError(err?.message || "Couldn't delete your data — try again.");
+      setDeleting(false);
+      setConfirming(false);
+    }
+  }
+
+  return (
+    <div className="detailStack">
+      <article className="detailBlock">
+        <p>
+          This permanently deletes your profile, goals, reflection answers, saved insights, and
+          every conversation with Maxwell. There's no undo — you'll start over as a brand new,
+          anonymous user.
+        </p>
+      </article>
+      {error && <p className="errorCopy">{error}</p>}
+      <button
+        className={`dangerButton ${confirming ? 'isConfirming' : ''}`}
+        type="button"
+        onClick={handleDelete}
+        disabled={deleting}
+      >
+        {deleting ? 'Deleting…' : confirming ? 'Tap again to permanently delete' : 'Delete everything'}
+      </button>
+    </div>
   );
 }
 

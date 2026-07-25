@@ -29,6 +29,7 @@ export default function VoiceAppShell({
   profile,
   onSaveProfile,
   onProfileUpdated,
+  onDataDeleted,
   voiceEnabled,
   onToggleVoiceEnabled,
   skin,
@@ -107,6 +108,7 @@ export default function VoiceAppShell({
             userId={userId}
             profile={profile}
             onSaveProfile={onSaveProfile}
+            onDataDeleted={onDataDeleted}
             voiceEnabled={voiceEnabled}
             onToggleVoiceEnabled={onToggleVoiceEnabled}
           />
