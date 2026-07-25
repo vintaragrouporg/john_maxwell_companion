@@ -104,6 +104,7 @@ export default function App() {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState("I'm glad you're here. Tap the orb and ask me anything about leadership.");
   const [currentInsight, setCurrentInsight] = useState(null);
+  const [citationCount, setCitationCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState(null);
 
   // Lets Brain personalize conversations across sessions (name, role, tone, etc.)
@@ -236,6 +237,7 @@ export default function App() {
     }
 
     setErrorMessage(null);
+    setQuestion('');
     window.clearTimeout(autoListenTimerRef.current);
 
     // Unlock audio playback on iOS Safari: a <audio> element can only start
@@ -248,16 +250,27 @@ export default function App() {
 
     const recognition = new SpeechRecognitionCtor();
     recognition.lang = 'en-US';
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     recognitionRef.current = recognition;
 
     recognition.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript?.trim();
-      if (!transcript) return;
-      setQuestion(transcript);
-      moveToVoiceState(2, 'listeningToReflecting', { transitionDuration: 360 });
-      sendQuery(transcript);
+      let finalTranscript = '';
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalTranscript += transcript;
+        else interimTranscript += transcript;
+      }
+      if (finalTranscript.trim()) {
+        setQuestion(finalTranscript.trim());
+        moveToVoiceState(2, 'listeningToReflecting', { transitionDuration: 360 });
+        sendQuery(finalTranscript.trim());
+      } else if (interimTranscript.trim()) {
+        // Live preview only — not sent until a final result arrives, so the
+        // user can see they're being heard while they're still talking.
+        setQuestion(interimTranscript.trim());
+      }
     };
     recognition.onerror = (event) => {
       if (event.error === 'aborted') return;
@@ -288,6 +301,7 @@ export default function App() {
     setAnswer('');
     answerRef.current = '';
     setCurrentInsight(null);
+    setCitationCount(0);
     streamAbortRef.current?.abort();
     const controller = new AbortController();
     streamAbortRef.current = controller;
@@ -296,6 +310,10 @@ export default function App() {
     try {
       await streamMessage(threadId, text, {
         signal: controller.signal,
+        onCitations: (citations) => {
+          const real = (citations || []).filter((c) => c.chunkId);
+          setCitationCount(real.length);
+        },
         onToken: (token) => {
           if (!respondingStarted) {
             respondingStarted = true;
@@ -417,6 +435,7 @@ export default function App() {
       demoQuestion={question}
       demoResponse={answer}
       currentInsightId={currentInsight?.id}
+      citationCount={citationCount}
       errorMessage={errorMessage}
       profile={profile}
       userId={userId}

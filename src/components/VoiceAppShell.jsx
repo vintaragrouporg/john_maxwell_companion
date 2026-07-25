@@ -23,6 +23,7 @@ export default function VoiceAppShell({
   demoQuestion,
   demoResponse,
   currentInsightId,
+  citationCount,
   errorMessage,
   userId,
   profile,
@@ -83,6 +84,7 @@ export default function VoiceAppShell({
             voiceTransition={voiceTransition}
             demoQuestion={demoQuestion}
             demoResponse={demoResponse}
+            citationCount={citationCount}
             errorMessage={errorMessage}
             isDemoInsightSaved={isDemoInsightSaved}
             onSaveCurrentInsight={onSaveCurrentInsight}
@@ -102,6 +104,7 @@ export default function VoiceAppShell({
           <ProfileScreen
             skin={skin}
             onOpenSelector={onOpenSelector}
+            userId={userId}
             profile={profile}
             onSaveProfile={onSaveProfile}
             voiceEnabled={voiceEnabled}
@@ -134,13 +137,14 @@ function HomeScreen({
   voiceTransition,
   demoQuestion,
   demoResponse,
+  citationCount,
   errorMessage,
   isDemoInsightSaved,
   onSaveCurrentInsight,
   onCycleVoiceState,
 }) {
   const [isHeroPressed, setIsHeroPressed] = useState(false);
-  const showTranscript = ['reflecting', 'responding'].includes(voiceState.id) && demoQuestion;
+  const showTranscript = ['listening', 'reflecting', 'responding'].includes(voiceState.id) && demoQuestion;
   const showResponse = voiceState.id === 'responding';
   // Before the first real question, "responding" never happens — surface Maxwell's
   // personalized opening greeting (loaded on mount) right in the idle state instead
@@ -182,7 +186,7 @@ function HomeScreen({
 
           {showTranscript && (
             <article className="conversationCard transcriptCard">
-              <span>You asked</span>
+              <span>{voiceState.id === 'listening' ? "You're saying" : 'You asked'}</span>
               <p>{demoQuestion}</p>
             </article>
           )}
@@ -201,6 +205,11 @@ function HomeScreen({
                 </button>
               </div>
               <p>{demoResponse}</p>
+              {citationCount > 0 && (
+                <small className="citationNote">
+                  Grounded in {citationCount} of his recorded talk{citationCount === 1 ? '' : 's'}
+                </small>
+              )}
             </article>
           )}
         </div>

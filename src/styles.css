@@ -2237,6 +2237,37 @@ button {
   line-height: 1.35;
 }
 
+.citationNote {
+  display: block;
+  margin-top: 8px;
+  color: rgba(255, 196, 92, 0.55);
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+}
+
+.goalBlock {
+  display: grid;
+  gap: 10px;
+}
+
+.goalBlock p {
+  margin: 0;
+}
+
+.achieveButton {
+  justify-self: start;
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 196, 92, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 196, 92, 0.08);
+  color: #ffc45c;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
 .bottomNav {
   position: relative;
   z-index: 4;
@@ -2262,7 +2293,7 @@ button {
 }
 
 .bottomNav button span {
-  font-size: 1.05rem;
+  font-size: 0.82rem;
   line-height: 1;
 }
 

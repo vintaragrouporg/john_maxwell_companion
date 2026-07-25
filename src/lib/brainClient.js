@@ -164,6 +164,36 @@ export async function streamMessage(threadId, query, { onToken, onCitations, onD
   }
 }
 
+export async function getGoals(userId) {
+  try {
+    const res = await fetch(`${API_URL}/goals?userId=${encodeURIComponent(userId)}`, { headers: headers() });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data?.goals ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function createGoal(userId, title, targetDate) {
+  const res = await fetch(`${API_URL}/goals`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ userId, title, targetDate }),
+  });
+  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  return res.json();
+}
+
+export async function setGoalStatus(goalId, status) {
+  const res = await fetch(`${API_URL}/goals/${encodeURIComponent(goalId)}`, {
+    method: 'PATCH',
+    headers: headers(),
+    body: JSON.stringify({ status }),
+  });
+  return res.ok;
+}
+
 // Requests spoken audio for `text`. Returns null (rather than throwing) when
 // voice isn't configured on the backend (no HUGGINGFACE_API_TOKEN) or the
 // request otherwise fails, so callers can just skip playback.

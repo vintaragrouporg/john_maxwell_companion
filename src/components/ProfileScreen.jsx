@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getGoals, createGoal, setGoalStatus } from '../lib/brainClient.js';
 
 const TONE_OPTIONS = [
   { id: 'direct', label: 'Direct' },
@@ -13,6 +14,7 @@ const BREVITY_OPTIONS = [
 export default function ProfileScreen({
   skin,
   onOpenSelector,
+  userId,
   profile,
   onSaveProfile,
   voiceEnabled,
@@ -20,6 +22,23 @@ export default function ProfileScreen({
 }) {
   const [activeSection, setActiveSection] = useState(null);
   const backToProfile = () => setActiveSection(null);
+
+  if (activeSection === 'goals') {
+    return (
+      <section className="productScreen">
+        <div className="screenHeading detailHeading">
+          <button className="backButton" type="button" onClick={backToProfile} aria-label="Back to profile">
+            ‹
+          </button>
+          <div>
+            <p className="eyebrow">Settings</p>
+            <h2>My Goals</h2>
+          </div>
+        </div>
+        <GoalsSection userId={userId} />
+      </section>
+    );
+  }
 
   if (activeSection === 'voice') {
     return (
@@ -97,6 +116,10 @@ export default function ProfileScreen({
       <ProfileForm profile={profile} onSave={onSaveProfile} />
 
       <div className="settingsList">
+        <button className="settingsRow" type="button" onClick={() => setActiveSection('goals')}>
+          <span>My Goals</span>
+          <strong>Track &amp; check in</strong>
+        </button>
         <button className="settingsRow" type="button" onClick={onOpenSelector}>
           <span>Preferred Skin</span>
           <strong>{skin.name}</strong>
@@ -111,6 +134,87 @@ export default function ProfileScreen({
         </button>
       </div>
     </section>
+  );
+}
+
+function GoalsSection({ userId }) {
+  const [goals, setGoals] = useState(null); // null = loading
+  const [title, setTitle] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const active = await getGoals(userId);
+      if (!cancelled) setGoals(active);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  async function handleAdd(event) {
+    event.preventDefault();
+    if (!title.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      const { id } = await createGoal(userId, title.trim());
+      setGoals((prev) => [{ id, title: title.trim(), status: 'active' }, ...(prev || [])]);
+      setTitle('');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleAchieve(goal) {
+    setGoals((prev) => prev.filter((g) => g.id !== goal.id));
+    await setGoalStatus(goal.id, 'achieved');
+  }
+
+  return (
+    <>
+      <form className="profileForm" onSubmit={handleAdd}>
+        <label className="formField">
+          <span>Add a goal</span>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Have the hard conversation with my report"
+          />
+        </label>
+        <button className="profileSaveButton" type="submit" disabled={submitting || !title.trim()}>
+          {submitting ? 'Adding…' : 'Add goal'}
+        </button>
+      </form>
+
+      {goals === null && (
+        <article className="detailBlock">
+          <p>Loading your goals…</p>
+        </article>
+      )}
+
+      {goals !== null && goals.length === 0 && (
+        <article className="detailBlock">
+          <p>No active goals yet. Add one above, and Maxwell will check in on it in a future conversation.</p>
+        </article>
+      )}
+
+      {goals !== null && goals.length > 0 && (
+        <div className="detailStack">
+          {goals.map((goal) => (
+            <article key={goal.id ?? goal.title} className="detailBlock goalBlock">
+              <p>{goal.title}</p>
+              {goal.id && (
+                <button className="achieveButton" type="button" onClick={() => handleAchieve(goal)}>
+                  Mark achieved
+                </button>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
