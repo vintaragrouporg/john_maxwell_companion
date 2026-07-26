@@ -32,6 +32,8 @@ export default function VoiceAppShell({
   onDataDeleted,
   voiceEnabled,
   onToggleVoiceEnabled,
+  showOnboarding,
+  onDismissOnboarding,
   skin,
   skins,
   voiceState,
@@ -90,6 +92,9 @@ export default function VoiceAppShell({
             isDemoInsightSaved={isDemoInsightSaved}
             onSaveCurrentInsight={onSaveCurrentInsight}
             onCycleVoiceState={onCycleVoiceState}
+            showOnboarding={showOnboarding}
+            onDismissOnboarding={onDismissOnboarding}
+            onGoToProfile={() => onSelectTab('profile')}
           />
         )}
 
@@ -144,6 +149,9 @@ function HomeScreen({
   isDemoInsightSaved,
   onSaveCurrentInsight,
   onCycleVoiceState,
+  showOnboarding,
+  onDismissOnboarding,
+  onGoToProfile,
 }) {
   const [isHeroPressed, setIsHeroPressed] = useState(false);
   const showTranscript = ['listening', 'reflecting', 'responding'].includes(voiceState.id) && demoQuestion;
@@ -155,6 +163,20 @@ function HomeScreen({
 
   return (
     <section className="homeScreen">
+      {showOnboarding && voiceState.id === 'idle' && (
+        <div className="onboardingNudge" role="note">
+          <p>New here? Tell Maxwell a bit about yourself so he can tailor this to you.</p>
+          <div className="onboardingNudgeActions">
+            <button type="button" onClick={onGoToProfile}>
+              Go to Profile
+            </button>
+            <button type="button" className="onboardingDismiss" onClick={onDismissOnboarding} aria-label="Dismiss">
+              Not now
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         className="visualStage"
         onPointerDown={() => setIsHeroPressed(true)}

@@ -27,6 +27,7 @@ const USER_ID_STORAGE_KEY = 'john-maxwell-user-id';
 const PROFILE_STORAGE_KEY = 'john-maxwell-user-profile';
 const VOICE_ENABLED_STORAGE_KEY = 'john-maxwell-voice-enabled';
 const DEVICE_TOKEN_STORAGE_KEY = 'john-maxwell-device-token';
+const ONBOARDING_DISMISSED_STORAGE_KEY = 'john-maxwell-onboarding-dismissed';
 
 const skins = [
   {
@@ -132,6 +133,9 @@ export default function App() {
   const [tokenReady, setTokenReady] = useState(false);
   const [profile, setProfile] = useState(getInitialProfile);
   const [voiceEnabled, setVoiceEnabled] = useState(getInitialVoiceEnabled);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(
+    () => window.localStorage.getItem(ONBOARDING_DISMISSED_STORAGE_KEY) === 'true',
+  );
   const micSupported = useMemo(() => Boolean(getSpeechRecognitionCtor()), []);
   const recognitionRef = useRef(null);
   const streamAbortRef = useRef(null);
@@ -532,6 +536,11 @@ export default function App() {
     setVoiceEnabled((current) => !current);
   }
 
+  function handleDismissOnboarding() {
+    setOnboardingDismissed(true);
+    window.localStorage.setItem(ONBOARDING_DISMISSED_STORAGE_KEY, 'true');
+  }
+
   function handleDataDeleted() {
     // The server-side data is already gone at this point — clear everything
     // identity-related locally too and reload as a brand new anonymous user.
@@ -559,6 +568,8 @@ export default function App() {
       onDataDeleted={handleDataDeleted}
       voiceEnabled={voiceEnabled}
       onToggleVoiceEnabled={handleToggleVoiceEnabled}
+      showOnboarding={!onboardingDismissed && !profile.firstName}
+      onDismissOnboarding={handleDismissOnboarding}
       skin={selectedSkin}
       skins={skins}
       voiceState={voiceState}

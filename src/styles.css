@@ -195,6 +195,52 @@ button {
   opacity: 0.75;
 }
 
+.onboardingNudge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 5;
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 196, 92, 0.28);
+  border-radius: 14px;
+  background: rgba(10, 7, 3, 0.92);
+  backdrop-filter: blur(6px);
+}
+
+.onboardingNudge p {
+  margin: 0;
+  color: rgba(255, 242, 211, 0.92);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.onboardingNudgeActions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.onboardingNudgeActions button {
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 196, 92, 0.4);
+  border-radius: 999px;
+  background: rgba(255, 196, 92, 0.14);
+  color: #ffe1a0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.onboardingNudgeActions .onboardingDismiss {
+  border-color: transparent;
+  background: transparent;
+  color: rgba(248, 231, 189, 0.5);
+}
+
 .visualStage {
   position: absolute;
   top: 0;
@@ -2237,6 +2283,39 @@ button {
   font-family: Georgia, "Times New Roman", serif;
   font-size: 1.05rem;
   line-height: 1.35;
+}
+
+.reflectionFormActions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.reflectionFormActions .profileSaveButton {
+  flex: 1;
+}
+
+.reflectionCancel {
+  padding: 12px 18px;
+  border: 1px solid rgba(255, 225, 160, 0.14);
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(248, 231, 189, 0.6);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.reflectionHistoryBlock span {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: rgba(255, 225, 160, 0.75);
+}
+
+.reflectionHistoryBlock {
+  display: grid;
+  gap: 8px;
 }
 
 .citationNote {
