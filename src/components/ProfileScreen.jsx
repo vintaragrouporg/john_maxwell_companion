@@ -75,7 +75,7 @@ export default function ProfileScreen({
             <span>Spoken responses</span>
             <p>When on, Maxwell's answers are read aloud after each response finishes streaming.</p>
           </article>
-          <button className="settingsRow" type="button" onClick={onToggleVoiceEnabled}>
+          <button className="settingsRow" type="button" aria-pressed={voiceEnabled} onClick={onToggleVoiceEnabled}>
             <span>Spoken responses</span>
             <strong>{voiceEnabled ? 'On' : 'Off'}</strong>
           </button>
@@ -337,12 +337,13 @@ function ProfileForm({ profile, onSave }) {
 
       <div className="formSegmentGroup">
         <span>Coaching tone</span>
-        <div className="segmentedControl">
+        <div className="segmentedControl" role="group" aria-label="Coaching tone">
           {TONE_OPTIONS.map((opt) => (
             <button
               key={opt.id}
               type="button"
               className={draft.tonePref === opt.id ? 'isActive' : ''}
+              aria-pressed={draft.tonePref === opt.id}
               onClick={() => updateField('tonePref', opt.id)}
             >
               {opt.label}
@@ -353,12 +354,13 @@ function ProfileForm({ profile, onSave }) {
 
       <div className="formSegmentGroup">
         <span>Response length</span>
-        <div className="segmentedControl">
+        <div className="segmentedControl" role="group" aria-label="Response length">
           {BREVITY_OPTIONS.map((opt) => (
             <button
               key={opt.id}
               type="button"
               className={draft.brevityPref === opt.id ? 'isActive' : ''}
+              aria-pressed={draft.brevityPref === opt.id}
               onClick={() => updateField('brevityPref', opt.id)}
             >
               {opt.label}

@@ -66,16 +66,16 @@ export default function VoiceAppShell({
       <section className="phoneSurface" aria-label="John Maxwell voice coaching demo">
         <header className="appHeader">
           <button className="iconButton menuButton" type="button" onClick={onOpenSelector} aria-label="Open skin selector">
-            <span />
-            <span />
-            <span />
+            <span aria-hidden="true" />
+            <span aria-hidden="true" />
+            <span aria-hidden="true" />
           </button>
           <div className="brandLockup" aria-label="John Maxwell, Leadership. Impact. Growth.">
             <h1>John Maxwell</h1>
             <p>Leadership. Impact. Growth.</p>
           </div>
           <button className="iconButton settingsButton" type="button" onClick={onOpenSettings} aria-label="Open demo settings">
-            <span className="gear" />
+            <span className="gear" aria-hidden="true" />
           </button>
         </header>
 
@@ -222,10 +222,11 @@ function HomeScreen({
                 <button
                   className={`bookmarkButton ${isDemoInsightSaved ? 'isSaved' : ''}`}
                   type="button"
-                  aria-label="Save response insight"
+                  aria-label={isDemoInsightSaved ? 'Remove saved insight' : 'Save response insight'}
+                  aria-pressed={isDemoInsightSaved}
                   onClick={onSaveCurrentInsight}
                 >
-                  ☆
+                  <span aria-hidden="true">☆</span>
                 </button>
               </div>
               <p>{demoResponse}</p>
@@ -261,9 +262,10 @@ function BottomNav({ activeTab, onSelectTab }) {
           key={tab.id}
           type="button"
           className={activeTab === tab.id ? 'isActive' : ''}
+          aria-current={activeTab === tab.id ? 'page' : undefined}
           onClick={() => onSelectTab(tab.id)}
         >
-          <span>{tab.icon}</span>
+          <span aria-hidden="true">{tab.icon}</span>
           {tab.label}
         </button>
       ))}

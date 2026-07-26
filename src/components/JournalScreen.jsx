@@ -91,7 +91,7 @@ export default function JournalScreen({ userId, bookmarkedInsights, onToggleInsi
         <div className="journalList">
           {threads.map((t) => (
             <button key={t.id} className="journalEntry" type="button" onClick={() => openThread(t.id)}>
-              <span className="entryIcon">◇</span>
+              <span className="entryIcon" aria-hidden="true">◇</span>
               <span>
                 <small>
                   {formatDate(t.createdAt)} · {t.userTurnCount} exchange{t.userTurnCount === 1 ? '' : 's'}
@@ -113,14 +113,15 @@ export default function JournalScreen({ userId, bookmarkedInsights, onToggleInsi
             {bookmarkedInsights.map((insight) => (
               <article key={insight.id} className="insightCard">
                 <div>
-                  <span>&ldquo;</span>
+                  <span aria-hidden="true">&ldquo;</span>
                   <button
                     className="bookmarkButton isSaved"
                     type="button"
                     aria-label="Remove saved insight"
+                    aria-pressed="true"
                     onClick={() => onToggleInsight(insight)}
                   >
-                    ☆
+                    <span aria-hidden="true">☆</span>
                   </button>
                 </div>
                 <p>{insight.text}</p>
