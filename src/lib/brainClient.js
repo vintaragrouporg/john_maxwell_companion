@@ -1,10 +1,19 @@
 const API_URL = (import.meta.env.VITE_BRAIN_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 const API_KEY = import.meta.env.VITE_BRAIN_API_KEY || '';
 
+// Set once after registerDevice() resolves; included on every subsequent
+// request so the shared API key alone isn't enough to act as this user.
+let userToken = null;
+
+export function setUserToken(token) {
+  userToken = token;
+}
+
 function headers() {
   return {
     'Content-Type': 'application/json',
     ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
+    ...(userToken ? { 'x-user-token': userToken } : {}),
   };
 }
 
@@ -21,6 +30,17 @@ export async function checkHealth() {
   const res = await fetch(`${API_URL}/health`, { headers: headers() });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
   return res.json();
+}
+
+export async function registerDevice(userId) {
+  const res = await fetch(`${API_URL}/device/register`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ userId }),
+  });
+  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  const data = await res.json();
+  return data?.token;
 }
 
 export async function getProfile(userId) {

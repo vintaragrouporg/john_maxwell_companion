@@ -11,6 +11,8 @@ import {
   getSavedInsights,
   saveInsight,
   deleteInsight,
+  registerDevice,
+  setUserToken,
 } from './lib/brainClient.js';
 
 // How long an idle conversation is still considered "the same sitting" and
@@ -24,6 +26,7 @@ const BOOKMARK_STORAGE_KEY = 'john-maxwell-saved-insights';
 const USER_ID_STORAGE_KEY = 'john-maxwell-user-id';
 const PROFILE_STORAGE_KEY = 'john-maxwell-user-profile';
 const VOICE_ENABLED_STORAGE_KEY = 'john-maxwell-voice-enabled';
+const DEVICE_TOKEN_STORAGE_KEY = 'john-maxwell-device-token';
 
 const skins = [
   {
@@ -126,6 +129,7 @@ export default function App() {
 
   // Lets Brain personalize conversations across sessions (name, role, tone, etc.)
   const [userId] = useState(getInitialUserId);
+  const [tokenReady, setTokenReady] = useState(false);
   const [profile, setProfile] = useState(getInitialProfile);
   const [voiceEnabled, setVoiceEnabled] = useState(getInitialVoiceEnabled);
   const micSupported = useMemo(() => Boolean(getSpeechRecognitionCtor()), []);
@@ -155,7 +159,36 @@ export default function App() {
     window.localStorage.setItem(BOOKMARK_STORAGE_KEY, JSON.stringify(bookmarkedInsights));
   }, [bookmarkedInsights]);
 
+  // Must resolve before any other Brain call that touches this user's data —
+  // once a userId has a registered token, Brain requires it on every request.
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const cached = window.localStorage.getItem(DEVICE_TOKEN_STORAGE_KEY);
+        if (cached) {
+          setUserToken(cached);
+        } else {
+          const token = await registerDevice(userId);
+          if (cancelled) return;
+          window.localStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, token);
+          setUserToken(token);
+        }
+      } catch {
+        // This userId is still unclaimed either way, so the first requests
+        // as this user will succeed regardless — proceed and let normal
+        // error handling surface anything if registration never recovers.
+      } finally {
+        if (!cancelled) setTokenReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!tokenReady) return;
     let cancelled = false;
     (async () => {
       const serverInsights = await getSavedInsights(userId);
@@ -177,10 +210,10 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-    // Runs once on mount to hydrate/migrate; toggleInsightBookmark keeps things
-    // in sync from then on.
+    // Runs once tokenReady flips true to hydrate/migrate; toggleInsightBookmark
+    // keeps things in sync from then on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [userId, tokenReady]);
 
   useEffect(() => {
     window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
@@ -191,6 +224,7 @@ export default function App() {
   }, [voiceEnabled]);
 
   useEffect(() => {
+    if (!tokenReady) return;
     let cancelled = false;
     (async () => {
       const serverProfile = await getProfile(userId);
@@ -203,7 +237,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, tokenReady]);
 
   useEffect(
     () => () => {
@@ -223,6 +257,7 @@ export default function App() {
   }, [micSupported]);
 
   useEffect(() => {
+    if (!tokenReady) return;
     let cancelled = false;
     (async () => {
       try {
@@ -253,11 +288,11 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-    // Intentionally runs once on mount with whatever profile is cached locally at
-    // that moment — later profile edits apply to the next reply via Brain's own
-    // per-userId lookup, not by restarting the conversation.
+    // Runs once tokenReady flips true, with whatever profile is cached locally
+    // at that moment — later profile edits apply to the next reply via Brain's
+    // own per-userId lookup, not by restarting the conversation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [tokenReady]);
 
   function moveToVoiceState(nextIndex, transitionName, options = {}) {
     const { delayStateChange = 0, transitionDuration = 700 } = options;
@@ -504,6 +539,7 @@ export default function App() {
     window.localStorage.removeItem(USER_ID_STORAGE_KEY);
     window.localStorage.removeItem(PROFILE_STORAGE_KEY);
     window.localStorage.removeItem(BOOKMARK_STORAGE_KEY);
+    window.localStorage.removeItem(DEVICE_TOKEN_STORAGE_KEY);
     window.location.reload();
   }
 
