@@ -141,7 +141,9 @@ export default function App() {
   const streamAbortRef = useRef(null);
   const answerRef = useRef('');
   const audioElRef = useRef(null);
+  const audioUnlockedRef = useRef(false);
   const autoListenTimerRef = useRef(null);
+  const listenTimeoutRef = useRef(null);
   const voiceStateIndexRef = useRef(voiceStateIndex);
 
   const selectedSkin = useMemo(
@@ -247,6 +249,7 @@ export default function App() {
     () => () => {
       window.clearTimeout(voiceTransitionTimerRef.current);
       window.clearTimeout(autoListenTimerRef.current);
+      window.clearTimeout(listenTimeoutRef.current);
       recognitionRef.current?.abort();
       streamAbortRef.current?.abort();
       audioElRef.current?.pause();
@@ -336,14 +339,25 @@ export default function App() {
     setErrorMessage(null);
     setQuestion('');
     window.clearTimeout(autoListenTimerRef.current);
+    window.clearTimeout(listenTimeoutRef.current);
 
     // Unlock audio playback on iOS Safari: a <audio> element can only start
     // playing programmatically later (after the async fetch/stream below) if
-    // it already played once inside a real user gesture. Reusing this same
-    // element in playSpokenAnswer carries that unlock forward.
+    // it already played once inside a real user gesture. Only needed once —
+    // after that, real TTS playback keeps the element unlocked on its own.
+    // Re-doing this play()/pause() dance on every tap (including immediately
+    // after that same element just finished playing a real response) touches
+    // the audio OUTPUT session milliseconds before requesting the microphone
+    // INPUT session. On iOS the two share one audio session, and starting the
+    // mic that soon after can silently fail to capture anything — the tap
+    // registers, recognition.start() doesn't throw, the UI shows "Listening",
+    // but no audio ever reaches it.
     if (!audioElRef.current) audioElRef.current = new Audio();
-    audioElRef.current.play().catch(() => {});
-    audioElRef.current.pause();
+    if (!audioUnlockedRef.current) {
+      audioElRef.current.play().catch(() => {});
+      audioElRef.current.pause();
+      audioUnlockedRef.current = true;
+    }
 
     const recognition = new SpeechRecognitionCtor();
     recognition.lang = 'en-US';
@@ -352,6 +366,9 @@ export default function App() {
     recognitionRef.current = recognition;
 
     recognition.onresult = (event) => {
+      // Any result — even interim — proves the mic is actually capturing
+      // audio, so the "silently never engaged" watchdog no longer applies.
+      window.clearTimeout(listenTimeoutRef.current);
       let finalTranscript = '';
       let interimTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -370,6 +387,7 @@ export default function App() {
       }
     };
     recognition.onerror = (event) => {
+      window.clearTimeout(listenTimeoutRef.current);
       if (event.error === 'aborted') return;
       setErrorMessage(`Voice input error: ${event.error}`);
       moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
@@ -381,6 +399,17 @@ export default function App() {
     moveToVoiceState(1, 'idleToListening', { transitionDuration: 620 });
     try {
       recognition.start();
+      // Safety net: if the mic never actually engages (recognition.start()
+      // succeeds but no result arrives — the exact "stuck on Listening"
+      // symptom above), don't leave the user stuck with no feedback.
+      listenTimeoutRef.current = window.setTimeout(() => {
+        if (recognitionRef.current === recognition) {
+          recognition.abort();
+          recognitionRef.current = null;
+          setErrorMessage("Didn't catch that — tap to try again.");
+          moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
+        }
+      }, 8000);
     } catch {
       setErrorMessage("Couldn't start the microphone. Check browser permissions.");
       moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
@@ -389,6 +418,7 @@ export default function App() {
 
   function stopListening() {
     window.clearTimeout(autoListenTimerRef.current);
+    window.clearTimeout(listenTimeoutRef.current);
     recognitionRef.current?.abort();
     recognitionRef.current = null;
     moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
