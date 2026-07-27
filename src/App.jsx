@@ -150,6 +150,13 @@ export default function App() {
   // mode is visible on-screen without needing a remote debugger. Remove once
   // root-caused.
   const micEventsRef = useRef([]);
+  // iOS Safari's SpeechRecognition can report success (start/audiostart fire)
+  // while the shared audio session hasn't actually switched back to
+  // "recording" after TTS playback, so no real audio ever reaches it. Keeping
+  // one getUserMedia stream open for the whole session (never stopping its
+  // tracks between turns) keeps the session locked into a recording-capable
+  // mode so it never has to renegotiate that transition per question.
+  const micStreamRef = useRef(null);
 
   const selectedSkin = useMemo(
     () => skins.find((skin) => skin.id === selectedSkinId) ?? skins[0],
@@ -258,6 +265,7 @@ export default function App() {
       recognitionRef.current?.abort();
       streamAbortRef.current?.abort();
       audioElRef.current?.pause();
+      micStreamRef.current?.getTracks().forEach((track) => track.stop());
     },
     [],
   );
@@ -330,6 +338,18 @@ export default function App() {
     finishTransition();
   }
 
+  function ensurePersistentMicStream() {
+    if (micStreamRef.current || !navigator.mediaDevices?.getUserMedia) return;
+    // Fire-and-forget — must not block/delay the synchronous recognition.start()
+    // call below, which still has to trace back to this tap on iOS.
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => {
+        micStreamRef.current = stream;
+      })
+      .catch(() => {});
+  }
+
   function startListening() {
     const SpeechRecognitionCtor = getSpeechRecognitionCtor();
     if (!SpeechRecognitionCtor) {
@@ -348,6 +368,7 @@ export default function App() {
     // Defensive: covers the barge-in path (interrupting Maxwell mid-response),
     // where playback may not have reached its natural 'ended' event yet.
     releaseAudioSession();
+    ensurePersistentMicStream();
 
     // Unlock audio playback on iOS Safari: a <audio> element can only start
     // playing programmatically later (after the async fetch/stream below) if
