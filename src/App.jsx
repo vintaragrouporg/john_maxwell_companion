@@ -340,6 +340,9 @@ export default function App() {
     setQuestion('');
     window.clearTimeout(autoListenTimerRef.current);
     window.clearTimeout(listenTimeoutRef.current);
+    // Defensive: covers the barge-in path (interrupting Maxwell mid-response),
+    // where playback may not have reached its natural 'ended' event yet.
+    releaseAudioSession();
 
     // Unlock audio playback on iOS Safari: a <audio> element can only start
     // playing programmatically later (after the async fetch/stream below) if
@@ -470,6 +473,22 @@ export default function App() {
     }
   }
 
+  // iOS shares one audio session between <audio> playback and microphone
+  // capture. Just calling .pause() leaves that session in the "playback"
+  // category — it doesn't actually release it, so a mic request shortly after
+  // can silently fail to receive any audio even though recognition.start()
+  // doesn't throw. Clearing the src and calling .load() forces iOS to tear
+  // the session down for real.
+  function releaseAudioSession() {
+    const audio = audioElRef.current;
+    if (!audio) return;
+    audio.pause();
+    if (audio.hasAttribute('src')) {
+      audio.removeAttribute('src');
+      audio.load();
+    }
+  }
+
   async function playSpokenAnswer(text) {
     if (!voiceEnabled) return;
     const { blob, error } = await fetchSpeech(text);
@@ -491,6 +510,10 @@ export default function App() {
       'ended',
       () => {
         URL.revokeObjectURL(url);
+        // Release the audio session as soon as playback actually finishes —
+        // well before the user's next tap — rather than waiting until they
+        // tap again to discover the mic needs it released first.
+        releaseAudioSession();
         // iOS Safari requires SpeechRecognition.start() to trace back to a real
         // user gesture — a setTimeout-triggered call (no tap involved) silently
         // fails to actually engage the mic, even though nothing errors. So we
