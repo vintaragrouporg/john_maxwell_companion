@@ -145,6 +145,11 @@ export default function App() {
   const autoListenTimerRef = useRef(null);
   const listenTimeoutRef = useRef(null);
   const voiceStateIndexRef = useRef(voiceStateIndex);
+  // TEMPORARY diagnostic trail for the "mic never re-engages" bug — records
+  // which SpeechRecognition lifecycle events actually fire so the failure
+  // mode is visible on-screen without needing a remote debugger. Remove once
+  // root-caused.
+  const micEventsRef = useRef([]);
 
   const selectedSkin = useMemo(
     () => skins.find((skin) => skin.id === selectedSkinId) ?? skins[0],
@@ -367,8 +372,18 @@ export default function App() {
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     recognitionRef.current = recognition;
+    micEventsRef.current = [];
+    const logMicEvent = (name) => micEventsRef.current.push(name);
+    recognition.onstart = () => logMicEvent('start');
+    recognition.onaudiostart = () => logMicEvent('audiostart');
+    recognition.onsoundstart = () => logMicEvent('soundstart');
+    recognition.onspeechstart = () => logMicEvent('speechstart');
+    recognition.onspeechend = () => logMicEvent('speechend');
+    recognition.onsoundend = () => logMicEvent('soundend');
+    recognition.onaudioend = () => logMicEvent('audioend');
 
     recognition.onresult = (event) => {
+      logMicEvent('result');
       // Any result — even interim — proves the mic is actually capturing
       // audio, so the "silently never engaged" watchdog no longer applies.
       window.clearTimeout(listenTimeoutRef.current);
@@ -392,7 +407,7 @@ export default function App() {
     recognition.onerror = (event) => {
       window.clearTimeout(listenTimeoutRef.current);
       if (event.error === 'aborted') return;
-      setErrorMessage(`Voice input error: ${event.error}`);
+      setErrorMessage(`Voice input error: ${event.error} [events: ${micEventsRef.current.join(',') || 'none'}]`);
       moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
     };
     recognition.onend = () => {
@@ -409,7 +424,7 @@ export default function App() {
         if (recognitionRef.current === recognition) {
           recognition.abort();
           recognitionRef.current = null;
-          setErrorMessage("Didn't catch that — tap to try again.");
+          setErrorMessage(`Didn't catch that — tap to try again. [events: ${micEventsRef.current.join(',') || 'none'}]`);
           moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
         }
       }, 8000);
