@@ -246,7 +246,7 @@ button {
   top: 0;
   left: 0;
   right: 0;
-  bottom: 36%;
+  bottom: 46%;
   z-index: 1;
   display: grid;
   place-items: center;
@@ -274,7 +274,7 @@ button {
   --hero-asset-y: 0px;
   position: relative;
   display: grid;
-  width: min(86vw, 382px, 42dvh);
+  width: min(76vw, 320px, 34dvh);
   aspect-ratio: 1;
   place-items: center;
   isolation: isolate;
@@ -285,7 +285,7 @@ button {
 }
 
 .skin-beacon .heroVisual {
-  width: min(90vw, 404px, 44dvh);
+  width: min(80vw, 340px, 36dvh);
 }
 
 .heroAtmosphereLayer,
@@ -800,7 +800,7 @@ button {
   align-items: center;
   justify-content: flex-end;
   gap: 21px;
-  height: 38%;
+  height: 48%;
   padding: 28px 24px 12px 24px;
   background: linear-gradient(
     to top,
@@ -2474,6 +2474,14 @@ button {
   .flameVisual,
   .beaconVisual {
     width: min(74vw, 300px);
+  }
+
+  .heroVisual {
+    width: min(66vw, 260px, 28dvh);
+  }
+
+  .skin-beacon .heroVisual {
+    width: min(70vw, 280px, 30dvh);
   }
 
   .voicePanel {
