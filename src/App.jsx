@@ -140,8 +140,17 @@ export default function App() {
   const recognitionRef = useRef(null);
   const streamAbortRef = useRef(null);
   const answerRef = useRef('');
-  const audioElRef = useRef(null);
-  const audioUnlockedRef = useRef(false);
+  // One AudioContext, created and resumed once inside the very first real tap
+  // gesture, kept alive (never closed) for the whole session purely to hold
+  // the page's "audio interaction unlocked" flag — later playback contexts
+  // can then autoplay without needing their own gesture.
+  const audioUnlockContextRef = useRef(null);
+  // The AudioContext + source node for whatever is playing right now (if
+  // anything). Each spoken answer gets its own fresh context so it can be
+  // fully closed — not just paused — the moment it ends, which is what
+  // actually releases iOS's shared audio session back to a recording-capable
+  // state before the mic is requested again.
+  const currentPlaybackRef = useRef(null);
   const autoListenTimerRef = useRef(null);
   const listenTimeoutRef = useRef(null);
   const voiceStateIndexRef = useRef(voiceStateIndex);
@@ -264,7 +273,8 @@ export default function App() {
       window.clearTimeout(listenTimeoutRef.current);
       recognitionRef.current?.abort();
       streamAbortRef.current?.abort();
-      audioElRef.current?.pause();
+      stopCurrentPlayback();
+      audioUnlockContextRef.current?.close().catch(() => {});
       micStreamRef.current?.getTracks().forEach((track) => track.stop());
     },
     [],
@@ -366,26 +376,24 @@ export default function App() {
     window.clearTimeout(autoListenTimerRef.current);
     window.clearTimeout(listenTimeoutRef.current);
     // Defensive: covers the barge-in path (interrupting Maxwell mid-response),
-    // where playback may not have reached its natural 'ended' event yet.
-    releaseAudioSession();
+    // where playback may not have reached its natural 'ended' event yet. Fully
+    // closing (not just pausing) the previous turn's AudioContext is what
+    // actually releases iOS's shared audio session before the mic is requested.
+    stopCurrentPlayback();
     ensurePersistentMicStream();
 
-    // Unlock audio playback on iOS Safari: a <audio> element can only start
-    // playing programmatically later (after the async fetch/stream below) if
-    // it already played once inside a real user gesture. Only needed once —
-    // after that, real TTS playback keeps the element unlocked on its own.
-    // Re-doing this play()/pause() dance on every tap (including immediately
-    // after that same element just finished playing a real response) touches
-    // the audio OUTPUT session milliseconds before requesting the microphone
-    // INPUT session. On iOS the two share one audio session, and starting the
-    // mic that soon after can silently fail to capture anything — the tap
-    // registers, recognition.start() doesn't throw, the UI shows "Listening",
-    // but no audio ever reaches it.
-    if (!audioElRef.current) audioElRef.current = new Audio();
-    if (!audioUnlockedRef.current) {
-      audioElRef.current.play().catch(() => {});
-      audioElRef.current.pause();
-      audioUnlockedRef.current = true;
+    // Unlock the Web Audio API on iOS Safari once, inside this real tap
+    // gesture. Later spoken answers get their own fresh AudioContext (created
+    // asynchronously, well outside any tap), which can only autoplay because
+    // this one was already resumed from within a genuine user gesture earlier
+    // in the session — the unlock is page-wide, not tied to one instance.
+    if (!audioUnlockContextRef.current) {
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextCtor) {
+        const ctx = new AudioContextCtor();
+        ctx.resume().catch(() => {});
+        audioUnlockContextRef.current = ctx;
+      }
     }
 
     const recognition = new SpeechRecognitionCtor();
@@ -509,20 +517,21 @@ export default function App() {
     }
   }
 
-  // iOS shares one audio session between <audio> playback and microphone
-  // capture. Just calling .pause() leaves that session in the "playback"
-  // category — it doesn't actually release it, so a mic request shortly after
-  // can silently fail to receive any audio even though recognition.start()
-  // doesn't throw. Clearing the src and calling .load() forces iOS to tear
-  // the session down for real.
-  function releaseAudioSession() {
-    const audio = audioElRef.current;
-    if (!audio) return;
-    audio.pause();
-    if (audio.hasAttribute('src')) {
-      audio.removeAttribute('src');
-      audio.load();
+  // Stops whatever is currently playing and fully closes its AudioContext.
+  // Closing (not just pausing/stopping the source) is what actually releases
+  // iOS's shared audio session back to a recording-capable state — pausing an
+  // <audio> element never did this reliably, which is why the mic kept
+  // silently failing to capture anything on the second question.
+  function stopCurrentPlayback() {
+    const playback = currentPlaybackRef.current;
+    currentPlaybackRef.current = null;
+    if (!playback) return;
+    try {
+      playback.source.stop();
+    } catch {
+      /* already stopped/ended */
     }
+    playback.context.close().catch(() => {});
   }
 
   async function playSpokenAnswer(text) {
@@ -536,20 +545,30 @@ export default function App() {
     // a null blob with no error in that case, so this silently activates once
     // voice is set up, with no code changes needed here.
     if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    // Reuse the element unlocked in startListening — iOS Safari blocks playback
-    // on a freshly created Audio() this far removed from the original tap gesture.
-    const audio = audioElRef.current || new Audio();
-    audioElRef.current = audio;
-    audio.src = url;
-    audio.addEventListener(
-      'ended',
-      () => {
-        URL.revokeObjectURL(url);
-        // Release the audio session as soon as playback actually finishes —
-        // well before the user's next tap — rather than waiting until they
-        // tap again to discover the mic needs it released first.
-        releaseAudioSession();
+
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) {
+      setErrorMessage("Voice playback isn't supported in this browser.");
+      return;
+    }
+
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      // A fresh context per answer — relies on audioUnlockContextRef having
+      // already unlocked Web Audio playback earlier in this session, since
+      // this call happens well outside any tap gesture.
+      const context = new AudioContextCtor();
+      const audioBuffer = await context.decodeAudioData(arrayBuffer);
+      const source = context.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(context.destination);
+      currentPlaybackRef.current = { context, source };
+      source.onended = () => {
+        // A barge-in tap may have already stopped+cleared this same source;
+        // only run natural-completion cleanup if it's still the active one.
+        if (currentPlaybackRef.current?.source !== source) return;
+        currentPlaybackRef.current = null;
+        context.close().catch(() => {});
         // iOS Safari requires SpeechRecognition.start() to trace back to a real
         // user gesture — a setTimeout-triggered call (no tap involved) silently
         // fails to actually engage the mic, even though nothing errors. So we
@@ -560,10 +579,11 @@ export default function App() {
         autoListenTimerRef.current = window.setTimeout(() => {
           if (voiceStateIndexRef.current === 3) moveToVoiceState(0, 'respondingToIdle', { transitionDuration: 400 });
         }, 600);
-      },
-      { once: true },
-    );
-    audio.play().catch((err) => setErrorMessage(`Couldn't play audio: ${err.message}`));
+      };
+      source.start();
+    } catch (err) {
+      setErrorMessage(`Couldn't play audio: ${err.message}`);
+    }
   }
 
   function cycleVoiceState() {
@@ -574,7 +594,7 @@ export default function App() {
       // back to listening, rather than making the user wait him out. Saving an
       // insight is now a separate action (the star button), not tied to this tap.
       window.clearTimeout(autoListenTimerRef.current);
-      audioElRef.current?.pause();
+      stopCurrentPlayback();
       startListening();
       return;
     }
